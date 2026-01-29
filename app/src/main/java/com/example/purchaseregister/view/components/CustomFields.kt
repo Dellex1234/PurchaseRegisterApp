@@ -18,10 +18,13 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun ReadOnlyField(
     value: String,
+    onValueChange: (String) -> Unit, // Permite actualizar el texto
     label: String,
     modifier: Modifier = Modifier,
+    isReadOnly: Boolean = true,      // Controla si se puede editar
     isHighlight: Boolean = false,
-    isSingleLine: Boolean = true
+    isSingleLine: Boolean = true,
+    textAlign: TextAlign = if (isSingleLine) TextAlign.Center else TextAlign.Start
 ) {
     Column(modifier = modifier.height(IntrinsicSize.Min)) {
         if (label.isNotEmpty()) {
@@ -29,7 +32,8 @@ fun ReadOnlyField(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(
-                        color = Color(0xFFF5F5F5),
+                        // Cambiamos el color de la etiqueta si es editable para dar feedback
+                        color = if (isReadOnly) Color(0xFFF5F5F5) else Color(0xFFE0F7F7),
                         shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp)
                     )
                     .border(
@@ -50,22 +54,23 @@ fun ReadOnlyField(
 
         OutlinedTextField(
             value = value,
-            onValueChange = {},
-            readOnly = true,
+            onValueChange = onValueChange,
+            readOnly = isReadOnly,
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight(),
             textStyle = LocalTextStyle.current.copy(
                 fontSize = 10.sp,
-                textAlign = if (isSingleLine) TextAlign.Center else TextAlign.Start
+                textAlign = textAlign
             ),
             shape = if (label.isNotEmpty())
                 RoundedCornerShape(bottomStart = 8.dp, bottomEnd = 8.dp)
             else RoundedCornerShape(8.dp),
             colors = TextFieldDefaults.colors(
-                focusedContainerColor = Color(0xFFF5F5F5),
-                unfocusedContainerColor = Color(0xFFF5F5F5),
-                focusedIndicatorColor = if (isHighlight) Color(0xFFFF5A00) else Color.Gray,
+                // Si es editable, ponemos fondo blanco; si es lectura, grisáceo
+                focusedContainerColor = if (isReadOnly) Color(0xFFF5F5F5) else Color.White,
+                unfocusedContainerColor = if (isReadOnly) Color(0xFFF5F5F5) else Color.White,
+                focusedIndicatorColor = if (isHighlight) Color(0xFFFF5A00) else Color(0xFF1FB8B9),
                 unfocusedIndicatorColor = Color.LightGray
             ),
             singleLine = isSingleLine,

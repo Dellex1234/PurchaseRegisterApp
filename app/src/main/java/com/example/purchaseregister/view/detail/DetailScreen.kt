@@ -15,7 +15,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.purchaseregister.model.ProductoItem
 import com.example.purchaseregister.view.components.ReadOnlyField
 import com.example.purchaseregister.view.puchase.obtenerRucSunat
@@ -96,17 +95,25 @@ fun DetailScreen(
             ) {
                 ReadOnlyField(
                     value = rucPropio,
+                    onValueChange = { },
                     label = "RUC Propio",
                     modifier = Modifier.weight(2.8f)
                 )
                 ReadOnlyField(
                     value = serie ?: "",
+                    onValueChange = { },
                     label = "Serie",
                     modifier = Modifier.weight(1.5f)
                 )
-                ReadOnlyField(value = numero ?: "", label = "N°", modifier = Modifier.weight(1f))
+                ReadOnlyField(
+                    value = numero ?: "",
+                    onValueChange = { },
+                    label = "N°",
+                    modifier = Modifier.weight(1f)
+                )
                 ReadOnlyField(
                     value = fecha ?: "",
+                    onValueChange = { },
                     label = "Fecha Emisión",
                     modifier = Modifier.weight(2.8f)
                 )
@@ -120,10 +127,16 @@ fun DetailScreen(
             ) {
                 ReadOnlyField(
                     value = tipoDocumento ?: "",
+                    onValueChange = { },
                     label = "Tipo de Documento",
                     modifier = Modifier.weight(1.8f)
                 )
-                ReadOnlyField(value = anio ?: "", label = "Año", modifier = Modifier.weight(0.4f))
+                ReadOnlyField(
+                    value = anio ?: "",
+                    onValueChange = { },
+                    label = "Año",
+                    modifier = Modifier.weight(0.4f)
+                )
             }
 
             // --- FILA 3: RUC Y RAZÓN SOCIAL EN UNA SOLA LÍNEA ---
@@ -135,6 +148,7 @@ fun DetailScreen(
             ) {
                 ReadOnlyField(
                     value = rucProveedor ?: "",
+                    onValueChange = { },
                     label = "RUC Proveedor",
                     modifier = Modifier
                         .weight(1.5f)
@@ -142,6 +156,7 @@ fun DetailScreen(
                 )
                 ReadOnlyField(
                     value = razonSocial ?: "",
+                    onValueChange = { },
                     label = "Razón Social del Proveedor",
                     modifier = Modifier
                         .weight(3f)
@@ -160,6 +175,7 @@ fun DetailScreen(
                 ) {
                     ReadOnlyField(
                         value = producto.descripcion,
+                        onValueChange = { },
                         label = if (index == 0) "Descripción" else "",
                         modifier = Modifier
                             .weight(3f)
@@ -168,6 +184,7 @@ fun DetailScreen(
                     )
                     ReadOnlyField(
                         value = producto.costoUnitario,
+                        onValueChange = { },
                         label = if (index == 0) "Costo Unit." else "",
                         modifier = Modifier
                             .weight(1.2f)
@@ -175,6 +192,7 @@ fun DetailScreen(
                     )
                     ReadOnlyField(
                         value = producto.cantidad,
+                        onValueChange = { },
                         label = if (index == 0) "Cant." else "",
                         modifier = Modifier
                             .weight(0.8f)
@@ -190,11 +208,13 @@ fun DetailScreen(
             ) {
                 ReadOnlyField(
                     value = moneda ?: "",
+                    onValueChange = { },
                     label = "Moneda",
                     modifier = Modifier.weight(1f)
                 )
                 ReadOnlyField(
                     value = tipoCambio ?: "",
+                    onValueChange = { },
                     label = "T.C.",
                     modifier = Modifier.weight(1f)
                 )
@@ -207,16 +227,19 @@ fun DetailScreen(
             ) {
                 ReadOnlyField(
                     value = costoTotal ?: "",
+                    onValueChange = { },
                     label = "Costo Total",
                     modifier = Modifier.weight(1.8f)
                 )
                 ReadOnlyField(
                     value = igv ?: "",
+                    onValueChange = { },
                     label = "IGV",
                     modifier = Modifier.weight(1.5f)
                 )
                 ReadOnlyField(
                     value = importeTotal ?: "",
+                    onValueChange = { },
                     label = "IMPORTE TOTAL",
                     modifier = Modifier.weight(2f)
                 )
