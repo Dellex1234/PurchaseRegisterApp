@@ -627,7 +627,7 @@ fun RegistroCompraScreen(onBack: () -> Unit) {
                         horizontalArrangement = Arrangement.Center
                     ) {
                         Text(
-                            text = "Registrar compra",
+                            text = "Registrar factura",
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.weight(1f),
@@ -853,7 +853,7 @@ fun RegistroCompraScreen(onBack: () -> Unit) {
                     ReadOnlyField(
                         value = importeTotal,
                         onValueChange = { importeTotal = it },
-                        label = "IMPORTE TOTAL",
+                        label = "Importe Total",
                         isReadOnly = !modoEdicion,
                         modifier = Modifier.weight(2f),
                         isHighlight = true

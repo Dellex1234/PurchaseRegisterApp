@@ -1,12 +1,7 @@
 package com.example.purchaseregister.view.puchase
 
-import android.content.ContentValues
-import android.content.Context
-import android.content.Intent
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.provider.MediaStore
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -14,9 +9,6 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,11 +19,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.purchaseregister.model.Invoice
-import org.apache.poi.xssf.usermodel.XSSFWorkbook
 import java.text.SimpleDateFormat
 import java.util.*
 import com.example.purchaseregister.navigation.DetailRoute
@@ -40,10 +30,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.purchaseregister.viewmodel.InvoiceViewModel
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.Saver
-import com.example.purchaseregister.utils.SunatPrefs
-import com.example.purchaseregister.utils.SunatLoginDialog
-import com.example.purchaseregister.utils.DateRangeSelector
-import com.example.purchaseregister.utils.toFormattedDate
+import com.example.purchaseregister.utils.*
+import com.example.purchaseregister.components.*
 
 val LongSaver = Saver<Long, Any>(
     save = { it },
@@ -135,7 +123,9 @@ fun PurchaseDetailScreen(
         isListVisible,
         selectedStartMillis,
         selectedEndMillis,
-        hasLoadedSunatData
+        hasLoadedSunatData,
+        facturasCompras,
+        facturasVentas
     ) {
         derivedStateOf {
             if (!hasLoadedSunatData) return@derivedStateOf emptyList<Invoice>()
@@ -158,7 +148,14 @@ fun PurchaseDetailScreen(
 
     val isSelectAllChecked by remember(sectionActive, listaFiltrada) {
         derivedStateOf {
-            listaFiltrada.isNotEmpty() && listaFiltrada.all { it.isSelected }
+            listaFiltrada.isNotEmpty() && listaFiltrada.all { factura ->
+                // Obtener el estado actual desde el ViewModel
+                if (sectionActive == Section.COMPRAS) {
+                    facturasCompras.firstOrNull { it.id == factura.id }?.isSelected ?: false
+                } else {
+                    facturasVentas.firstOrNull { it.id == factura.id }?.isSelected ?: false
+                }
+            }
         }
     }
 
@@ -303,10 +300,17 @@ fun PurchaseDetailScreen(
             ) {
                 CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
                     Checkbox(checked = isSelectAllChecked, onCheckedChange = { checked ->
+                        println("🔘 [Seleccionar todos] Checked: $checked, Facturas filtradas: ${listaFiltrada.size}")
                         if (sectionActive == Section.COMPRAS) {
-                            viewModel.seleccionarTodasCompras(checked)
+                            listaFiltrada.forEach { factura ->
+                                println("🔘 [Seleccionando] ID: ${factura.id}")
+                                viewModel.actualizarSeleccionCompras(factura.id, checked)
+                            }
                         } else {
-                            viewModel.seleccionarTodasVentas(checked)
+                            listaFiltrada.forEach { factura ->
+                                println("🔘 [Seleccionando] ID: ${factura.id}")
+                                viewModel.actualizarSeleccionVentas(factura.id, checked)
+                            }
                         }
                     })
                 }
@@ -373,388 +377,260 @@ fun PurchaseDetailScreen(
                         HeaderCell("Número", 90.dp)
                         HeaderCell("Fecha", 100.dp)
                         HeaderCell("Estado", 100.dp)
-                        Row(
+                        Box(
                             modifier = Modifier.width(120.dp),
-                            horizontalArrangement = Arrangement.SpaceEvenly,
-                            verticalAlignment = Alignment.CenterVertically
+                            contentAlignment = Alignment.Center
                         ) {
-                            IconButton(
-                                onClick = {
-                                    // 1. Obtenemos solo las facturas seleccionadas de la lista que se ve en pantalla
-                                    val facturasParaDescargar =
-                                        listaFiltrada.filter { it.isSelected }
-
-                                    if (facturasParaDescargar.isNotEmpty()) {
-                                        Toast.makeText(
-                                            context,
-                                            "Generando archivo Excel",
-                                            Toast.LENGTH_LONG
-                                        ).show()
-                                        generarExcelEjemplo(
-                                            context,
-                                            facturasParaDescargar,
-                                            isShareMode = false
-                                        )
-                                    } else {
-                                        Toast.makeText(
-                                            context,
-                                            "Seleccione al menos una factura",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                    }
+                            val todasConDetalle = listaFiltrada.count { factura ->
+                                val estaSeleccionada = if (sectionActive == Section.COMPRAS) {
+                                    facturasCompras.firstOrNull { it.id == factura.id }?.isSelected
+                                        ?: false
+                                } else {
+                                    facturasVentas.firstOrNull { it.id == factura.id }?.isSelected
+                                        ?: false
                                 }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Download,
-                                    contentDescription = "Descargar",
-                                    tint = Color(0xFF1FB8B9),
-                                    modifier = Modifier.size(24.dp)
-                                )
+
+                                // Solo verificar las que están seleccionadas
+                                estaSeleccionada && factura.estado == "CON DETALLE"
                             }
-                            IconButton(
+
+                            val haySeleccionadas = todasConDetalle > 0
+
+                            Button(
                                 onClick = {
-                                    // 1. Filtramos solo lo seleccionado
-                                    val facturasParaCompartir =
-                                        listaFiltrada.filter { it.isSelected }
-
-                                    if (facturasParaCompartir.isNotEmpty()) {
-                                        // 2. Mostramos el mensaje de que está procesando
-                                        Toast.makeText(
-                                            context,
-                                            "Preparando archivo para compartir",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-
-                                        // 3. Llamamos a la función con el modo compartir ACTIVADO (true)
-                                        generarExcelEjemplo(
-                                            context,
-                                            facturasParaCompartir,
-                                            isShareMode = true
-                                        )
-                                    } else {
-                                        // 4. Si no seleccionó nada, avisamos
-                                        Toast.makeText(
-                                            context,
-                                            "Seleccione al menos una factura",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                    }
-                                }
+                                    Toast.makeText(
+                                        context,
+                                        "✅ Se ha registrado $todasConDetalle factura(s) exitosamente",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                },
+                                modifier = Modifier
+                                    .height(36.dp)
+                                    .width(150.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (haySeleccionadas) Color(
+                                        0xFF1FB8B9
+                                    ) else Color.Gray
+                                ),
+                                enabled = haySeleccionadas
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Share,
-                                    contentDescription = "Compartir",
-                                    tint = Color(0xFF1FB8B9),
-                                    modifier = Modifier.size(24.dp)
+                                Text(
+                                    text = "Registrar",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
                                 )
                             }
                         }
                     }
 
-                    // CUERPO (Listado)
-                    Column(
-                        modifier = Modifier
-                            .width(totalWidth)
-                            .weight(1f)
-                            .verticalScroll(rememberScrollState())
-                    ) {
-                        if (!isListVisible) {
-                            Text(
-                                "Presione Consultar para ver registros",
-                                modifier = Modifier
-                                    .width(totalWidth)
-                                    .padding(20.dp),
-                                textAlign = TextAlign.Center,
-                                color = Color.Gray
-                            )
-                        } else if (listaFiltrada.isEmpty()) {
-                            Text(
-                                "No hay resultados",
-                                modifier = Modifier
-                                    .width(totalWidth)
-                                    .padding(20.dp),
-                                textAlign = TextAlign.Center,
-                                color = Color.Gray
-                            )
-                        } else {
-                            listaFiltrada.forEach { factura ->
-                                Row(
-                                    modifier = Modifier
-                                        .width(totalWidth)
-                                        .background(if (factura.isSelected) Color(0xFFF5F5F5) else Color.Transparent)
-                                        .padding(vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Box(
-                                        modifier = Modifier.width(50.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Checkbox(
-                                            checked = factura.isSelected,
-                                            onCheckedChange = { checked ->
-                                                if (sectionActive == Section.COMPRAS) {
-                                                    viewModel.actualizarSeleccionCompras(factura.id, checked)
-                                                } else {
-                                                    viewModel.actualizarSeleccionVentas(factura.id, checked)
-                                                }
-                                            }
-                                        )
-                                    }
-                                    SimpleTableCell(factura.ruc, 120.dp)
-                                    SimpleTableCell(factura.serie, 70.dp)
-                                    SimpleTableCell(factura.numero, 90.dp)
-                                    SimpleTableCell(factura.fechaEmision, 100.dp)
-                                    Box(
-                                        modifier = Modifier.width(100.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            factura.estado,
-                                            fontSize = 10.sp,
-                                            color = when (factura.estado) {
-                                                "CONSULTADO" -> Color(0xFF2196F3)
-                                                "CON DETALLE" -> Color(0xFFFF5A00)
-                                                "REGISTRADO" -> Color(0xFF4CAF50)
-                                                else -> Color.Gray
-                                            },
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                    Box(
-                                        modifier = Modifier.width(120.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        TextButton(onClick = {
-                                            onNavigateToDetalle(
-                                                DetailRoute(
-                                                    id = factura.id,
-                                                    rucProveedor = factura.ruc,
-                                                    serie = factura.serie,
-                                                    numero = factura.numero,
-                                                    fecha = factura.fechaEmision,
-                                                    razonSocial = factura.razonSocial,
-                                                    tipoDocumento = factura.tipoDocumento,
-                                                    moneda = factura.moneda,
-                                                    costoTotal = factura.costoTotal,
-                                                    igv = factura.igv,
-                                                    importeTotal = factura.importeTotal,
-                                                    anio = factura.anio,
-                                                    tipoCambio = factura.tipoCambio,
-                                                    esCompra = (sectionActive == Section.COMPRAS)
-                                                )
-                                            )
-                                        }) {
-                                            Text(
-                                                "Detalle",
-                                                fontSize = 12.sp,
-                                                textDecoration = TextDecoration.Underline
-                                            )
-                                        }
-                                    }
-                                }
-                                Divider(
-                                    modifier = Modifier.width(totalWidth),
-                                    thickness = 0.5.dp,
-                                    color = Color.LightGray
-                                )
-                            }
-                        }
-                    }
-                    // --- FOOTER
-                    if (isListVisible) {
-                        val seleccionados = listaFiltrada.count { it.isSelected }
-                        Row(
+                        // CUERPO (Listado)
+                        Column(
                             modifier = Modifier
                                 .width(totalWidth)
-                                .background(Color.LightGray)
-                                .padding(vertical = 10.dp, horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.Start
+                                .weight(1f)
+                                .verticalScroll(rememberScrollState())
                         ) {
-                            Text(
-                                text = when {
-                                    seleccionados == 1 -> "1 factura seleccionada de ${listaFiltrada.size}"
-                                    seleccionados > 1 -> "$seleccionados facturas seleccionadas de ${listaFiltrada.size}"
-                                    else -> "Facturas registradas: ${listaFiltrada.size}"
-                                },
-                                fontSize = 13.sp, fontWeight = FontWeight.Bold,
-                                color = Color.Black
-                            )
+                            if (!isListVisible) {
+                                Text(
+                                    "Presione Consultar para ver registros",
+                                    modifier = Modifier
+                                        .width(totalWidth)
+                                        .padding(20.dp),
+                                    textAlign = TextAlign.Center,
+                                    color = Color.Gray
+                                )
+                            } else if (listaFiltrada.isEmpty()) {
+                                Text(
+                                    "No hay resultados",
+                                    modifier = Modifier
+                                        .width(totalWidth)
+                                        .padding(20.dp),
+                                    textAlign = TextAlign.Center,
+                                    color = Color.Gray
+                                )
+                            } else {
+                                listaFiltrada.forEach { factura ->
+                                    // Agrega este log para ver el estado actual de cada factura
+                                    val estadoActual = if (sectionActive == Section.COMPRAS) {
+                                        facturasCompras.firstOrNull { it.id == factura.id }?.isSelected
+                                            ?: false
+                                    } else {
+                                        facturasVentas.firstOrNull { it.id == factura.id }?.isSelected
+                                            ?: false
+                                    }
+
+                                    println("🔘 [Checkbox] ID: ${factura.id}, Estado en listaFiltrada: ${factura.isSelected}, Estado real en ViewModel: $estadoActual")
+
+                                    Row(
+                                        modifier = Modifier
+                                            .width(totalWidth)
+                                            .background(if (estadoActual) Color(0xFFF5F5F5) else Color.Transparent)
+                                            .padding(vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier.width(50.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Checkbox(
+                                                checked = estadoActual,  // ¡IMPORTANTE! Usar el estado real
+                                                onCheckedChange = { checked ->
+                                                    println("🔘 [Checkbox click] ID: ${factura.id}, Checked: $checked")
+                                                    if (sectionActive == Section.COMPRAS) {
+                                                        viewModel.actualizarSeleccionCompras(
+                                                            factura.id,
+                                                            checked
+                                                        )
+                                                    } else {
+                                                        viewModel.actualizarSeleccionVentas(
+                                                            factura.id,
+                                                            checked
+                                                        )
+                                                    }
+                                                }
+                                            )
+                                        }
+                                        SimpleTableCell(factura.ruc, 120.dp)
+                                        SimpleTableCell(factura.serie, 70.dp)
+                                        SimpleTableCell(factura.numero, 90.dp)
+                                        SimpleTableCell(factura.fechaEmision, 100.dp)
+                                        Box(
+                                            modifier = Modifier.width(100.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            InvoiceStatusCell(factura.estado)
+                                        }
+                                        Box(
+                                            modifier = Modifier.width(120.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            TextButton(onClick = {
+                                                onNavigateToDetalle(
+                                                    DetailRoute(
+                                                        id = factura.id,
+                                                        rucProveedor = factura.ruc,
+                                                        serie = factura.serie,
+                                                        numero = factura.numero,
+                                                        fecha = factura.fechaEmision,
+                                                        razonSocial = factura.razonSocial,
+                                                        tipoDocumento = factura.tipoDocumento,
+                                                        moneda = factura.moneda,
+                                                        costoTotal = factura.costoTotal,
+                                                        igv = factura.igv,
+                                                        importeTotal = factura.importeTotal,
+                                                        anio = factura.anio,
+                                                        tipoCambio = factura.tipoCambio,
+                                                        esCompra = (sectionActive == Section.COMPRAS)
+                                                    )
+                                                )
+                                            }) {
+                                                Text(
+                                                    "Detalle",
+                                                    fontSize = 12.sp,
+                                                    textDecoration = TextDecoration.Underline
+                                                )
+                                            }
+                                        }
+                                    }
+                                    Divider(
+                                        modifier = Modifier.width(totalWidth),
+                                        thickness = 0.5.dp,
+                                        color = Color.LightGray
+                                    )
+                                }
+                            }
+                        }
+                        // --- FOOTER
+                        if (isListVisible) {
+                            val seleccionados = listaFiltrada.count { factura ->
+                                val estadoReal = if (sectionActive == Section.COMPRAS) {
+                                    facturasCompras.firstOrNull { it.id == factura.id }?.isSelected
+                                        ?: false
+                                } else {
+                                    facturasVentas.firstOrNull { it.id == factura.id }?.isSelected
+                                        ?: false
+                                }
+                                estadoReal
+                            }
+                            Row(
+                                modifier = Modifier
+                                    .width(totalWidth)
+                                    .background(Color.LightGray)
+                                    .padding(vertical = 10.dp, horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.Start
+                            ) {
+                                Text(
+                                    text = when {
+                                        seleccionados == 1 -> "1 factura seleccionada de ${listaFiltrada.size}"
+                                        seleccionados > 1 -> "$seleccionados facturas seleccionadas de ${listaFiltrada.size}"
+                                        else -> "Facturas registradas: ${listaFiltrada.size}"
+                                    },
+                                    fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                                    color = Color.Black
+                                )
+                            }
                         }
                     }
                 }
             }
-        }
 
-        // 3. BOTONES INFERIORES: CONSULTAR Y REGISTRAR
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Button(
-                onClick = {
-                    val token = SunatPrefs.getToken(context)
-                    val ruc = SunatPrefs.getRuc(context)
-                    val user = SunatPrefs.getUser(context)
-
-                    println("SUNAT DATA → RUC: $ruc | USUARIO: $user | TOKEN: $token")
-                    if (token == null) {
-                        showSunatLogin = true // Abre el WebView si no hay hash
-                    } else {
-                        if (!hasLoadedSunatData) {
-                            hasLoadedSunatData = true
-                        }
-                        isLoading = true
-                        Handler(Looper.getMainLooper()).postDelayed({
-                            isListVisible = true
-                            isLoading = false
-                        }, 1000)
-                    }
-                },
+            // 3. BOTONES INFERIORES: CONSULTAR Y REGISTRAR
+            Row(
                 modifier = Modifier
-                    .weight(1f)
-                    .height(45.dp),
-                shape = MaterialTheme.shapes.medium,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1FB8B9))
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("Consultar", style = MaterialTheme.typography.titleMedium)
-            }
-            if (sectionActive == Section.COMPRAS) {
                 Button(
-                    onClick = onNavigateToRegistrar,
+                    onClick = {
+                        val token = SunatPrefs.getToken(context)
+                        val ruc = SunatPrefs.getRuc(context)
+                        val user = SunatPrefs.getUser(context)
+
+                        println("SUNAT DATA → RUC: $ruc | USUARIO: $user | TOKEN: $token")
+                        if (token == null) {
+                            showSunatLogin = true // Abre el WebView si no hay hash
+                        } else {
+                            if (!hasLoadedSunatData) {
+                                hasLoadedSunatData = true
+                            }
+                            isLoading = true
+                            Handler(Looper.getMainLooper()).postDelayed({
+                                isListVisible = true
+                                isLoading = false
+                            }, 1000)
+                        }
+                    },
                     modifier = Modifier
                         .weight(1f)
                         .height(45.dp),
                     shape = MaterialTheme.shapes.medium,
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1FB8B9))
-                ) { Text("Registrar", style = MaterialTheme.typography.titleMedium) }
+                ) {
+                    Text("Consultar", style = MaterialTheme.typography.titleMedium)
+                }
+                if (sectionActive == Section.COMPRAS) {
+                    Button(
+                        onClick = onNavigateToRegistrar,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(45.dp),
+                        shape = MaterialTheme.shapes.medium,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1FB8B9))
+                    ) { Text("Subir Factura", style = MaterialTheme.typography.titleMedium) }
+                }
             }
         }
     }
-}
 
-@Composable
-fun HeaderCell(text: String, width: Dp) {
-    Text(
-        text,
-        modifier = Modifier
-            .width(width)
-            .padding(8.dp),
-        fontWeight = FontWeight.Bold,
-        textAlign = TextAlign.Center
-    )
-}
-
-// Componente auxiliar para las celdas
-@Composable
-fun SimpleTableCell(text: String, width: Dp) {
-
-    Text(
-        text = text,
-        modifier = Modifier
-            .width(width)
-            .padding(8.dp),
-        fontSize = 12.sp,
-        textAlign = TextAlign.Center
-    )
-}
-
-@Preview(showBackground = true, showSystemUi = true)
-@Composable
-fun PurchaseScreenPreview() {
-    val viewModel: InvoiceViewModel = viewModel()
-    // Usamos funciones vacías { } para el preview porque no necesitamos lógica aquí
-    PurchaseDetailScreen(
-        viewModel = viewModel,
-        onComprasClick = { },
-        onVentasClick = { },
-        onNavigateToRegistrar = { },
-        onNavigateToDetalle = { })
-}
-
-fun generarExcelEjemplo(
-    context: Context,
-    facturas: List<Invoice>,
-    isShareMode: Boolean = false
-) {
-    try {
-        val workbook = XSSFWorkbook()
-        val sheet = workbook.createSheet("Reporte")
-
-        // 1. Cabecera y Datos
-        val columnas = listOf("RUC", "Serie", "Número", "Fecha", "Razón Social")
-        val headerRow = sheet.createRow(0)
-        columnas.forEachIndexed { i, title -> headerRow.createCell(i).setCellValue(title) }
-        facturas.forEachIndexed { index, factura ->
-            val row = sheet.createRow(index + 1)
-            row.createCell(0).setCellValue(factura.ruc)
-            row.createCell(1).setCellValue(factura.serie)
-            row.createCell(2).setCellValue(factura.numero)
-            row.createCell(3).setCellValue(factura.fechaEmision)
-            row.createCell(4).setCellValue(factura.razonSocial)
-        }
-
-        val fileName = "Reporte_${System.currentTimeMillis()}.xlsx"
-        val resolver = context.contentResolver
-
-        val contentUri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            MediaStore.Downloads.EXTERNAL_CONTENT_URI
-        } else {
-            MediaStore.Files.getContentUri("external")
-        }
-
-        val contentValues = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
-            put(
-                MediaStore.MediaColumns.MIME_TYPE,
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                put(MediaStore.MediaColumns.RELATIVE_PATH, "Download/RegistroContable")
-            }
-        }
-
-        val uri = resolver.insert(contentUri, contentValues)
-
-        if (uri != null) {
-            resolver.openOutputStream(uri)?.use { workbook.write(it) }
-            workbook.close()
-
-            Toast.makeText(context, "Excel generado exitosamente", Toast.LENGTH_SHORT).show()
-
-            // 1. Creamos el Intent base para ver el archivo
-            if (isShareMode) {
-                // --- LÓGICA PARA COMPARTIR (WhatsApp, Gmail, etc.) ---
-                val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                    type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    putExtra(Intent.EXTRA_STREAM, uri)
-                    putExtra(Intent.EXTRA_SUBJECT, "Reporte de Facturas")
-                    putExtra(
-                        Intent.EXTRA_TEXT,
-                        "Adjunto envío el reporte de facturas generado desde la App."
-                    )
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                val chooser = Intent.createChooser(shareIntent, "Compartir reporte vía:")
-                chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                context.startActivity(chooser)
-            } else {
-                // --- LÓGICA PARA VER/ABRIR (Sheets, Excel) ---
-                val viewIntent = Intent(Intent.ACTION_VIEW).apply {
-                    setDataAndType(
-                        uri,
-                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                val chooser = Intent.createChooser(viewIntent, "Abrir reporte con:")
-                chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                context.startActivity(chooser)
-            }
-        }
-    } catch (e: Exception) {
-        e.printStackTrace()
-        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+    @Preview(showBackground = true, showSystemUi = true)
+    @Composable
+    fun PurchaseScreenPreview() {
+        val viewModel: InvoiceViewModel = viewModel()
+        PurchaseDetailScreen(
+            viewModel = viewModel,
+            onComprasClick = { },
+            onVentasClick = { },
+            onNavigateToRegistrar = { },
+            onNavigateToDetalle = { })
     }
-}

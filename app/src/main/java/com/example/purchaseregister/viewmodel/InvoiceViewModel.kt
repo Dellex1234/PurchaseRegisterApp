@@ -115,10 +115,12 @@ class InvoiceViewModel : ViewModel() {
     }
     // Funciones para los checkboxes
     fun actualizarSeleccionCompras(id: Int, isSelected: Boolean) {
+        println("🔄 [ViewModel] actualizarSeleccionCompras - ID: $id, Selected: $isSelected")
         viewModelScope.launch {
             _facturasCompras.update { lista ->
                 lista.map { factura ->
                     if (factura.id == id) {
+                        println("✅ [ViewModel] Factura COMPRA actualizada: ID=${factura.id}, Selected=$isSelected")
                         factura.copy(isSelected = isSelected)
                     } else {
                         factura
@@ -129,10 +131,12 @@ class InvoiceViewModel : ViewModel() {
     }
 
     fun actualizarSeleccionVentas(id: Int, isSelected: Boolean) {
+        println("🔄 [ViewModel] actualizarSeleccionVentas - ID: $id, Selected: $isSelected")
         viewModelScope.launch {
             _facturasVentas.update { lista ->
                 lista.map { factura ->
                     if (factura.id == id) {
+                        println("✅ [ViewModel] Factura VENTA actualizada: ID=${factura.id}, Selected=$isSelected")
                         factura.copy(isSelected = isSelected)
                     } else {
                         factura
