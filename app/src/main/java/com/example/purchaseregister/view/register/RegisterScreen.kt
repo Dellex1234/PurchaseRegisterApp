@@ -27,8 +27,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.purchaseregister.BuildConfig
-import com.example.purchaseregister.model.ProductoItem
+import com.example.purchaseregister.model.ProductItem
 import com.example.purchaseregister.view.components.ReadOnlyField
 import kotlinx.coroutines.launch
 import okhttp3.*
@@ -39,6 +40,7 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
 import com.example.purchaseregister.utils.SunatPrefs
+import com.example.purchaseregister.viewmodel.InvoiceViewModel
 import java.util.concurrent.TimeUnit
 
 // FUNCIONES AUXILIARES OPTIMIZADAS
@@ -342,7 +344,10 @@ fun formatearMoneda(moneda: String): String {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RegistroCompraScreen(onBack: () -> Unit) {
+fun RegistroCompraScreen(
+    onBack: () -> Unit,
+    viewModel: InvoiceViewModel
+) {
     val context = LocalContext.current
     LaunchedEffect(Unit) {
         val ruc = SunatPrefs.getRuc(context)
@@ -391,7 +396,7 @@ fun RegistroCompraScreen(onBack: () -> Unit) {
     var importeTotal by remember { mutableStateOf("") }
 
     val listaProductos = remember {
-        mutableStateListOf(ProductoItem("", "", ""))
+        mutableStateListOf(ProductItem("", "", ""))
     }
 
     // Función para limpiar montos
@@ -534,7 +539,7 @@ fun RegistroCompraScreen(onBack: () -> Unit) {
                             for (i in 0 until arr.length()) {
                                 val p = arr.getJSONObject(i)
                                 listaProductos.add(
-                                    ProductoItem(
+                                    ProductItem(
                                         p.optString("descripcion"),
                                         p.optString("costo_unitario"),
                                         p.optString("cantidad")
@@ -545,7 +550,7 @@ fun RegistroCompraScreen(onBack: () -> Unit) {
 
                         // Si no hay productos, mantener al menos uno vacío
                         if (listaProductos.isEmpty()) {
-                            listaProductos.add(ProductoItem("", "", ""))
+                            listaProductos.add(ProductItem("", "", ""))
                         }
 
                         // DEBUG: Verificar datos extraídos
@@ -868,13 +873,50 @@ fun RegistroCompraScreen(onBack: () -> Unit) {
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     Button(
-                        onClick = { /* Lógica Registrar */ },
+                        onClick = {
+                            // Validar datos mínimos
+                            if (rucProveedor.isEmpty() || serie.isEmpty() || numero.isEmpty()) {
+                                Toast.makeText(context, "Complete los datos de la factura", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+
+                            // Agregar factura al ViewModel
+                            viewModel.agregarNuevaFacturaCompra(
+                                ruc = rucProveedor,
+                                razonSocial = razonSocialProveedor,
+                                serie = serie,
+                                numero = numero,
+                                fechaEmision = fecha,
+                                tipoDocumento = tipoDocumento,
+                                moneda = moneda,
+                                costoTotal = costoTotal,
+                                igv = igv,
+                                importeTotal = importeTotal,
+                                anio = if (esImportacion) anioImportacion else "",
+                                tipoCambio = tipoCambio
+                            )
+
+                            Toast.makeText(
+                                context,
+                                "✅ Factura registrada exitosamente",
+                                Toast.LENGTH_LONG
+                            ).show()
+
+                            // Regresar a la pantalla principal
+                            onBack()
+                        },
                         modifier = Modifier
                             .weight(1f)
                             .height(48.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1FB8B9)),
-                        shape = MaterialTheme.shapes.medium
-                    ) { Text("REGISTRAR", fontWeight = FontWeight.Bold) }
+                        shape = MaterialTheme.shapes.medium,
+                        enabled = fotoTomada && !isLoading
+                    ) {
+                        Text(
+                            text = if (isLoading) "PROCESANDO..." else "REGISTRAR",
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
 
                     Button(
                         onClick = { modoEdicion = !modoEdicion },
@@ -917,5 +959,9 @@ fun RegistroCompraScreen(onBack: () -> Unit) {
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
 fun RegistroCompraScreenPreview() {
-    RegistroCompraScreen(onBack = { })
+    val viewModel: InvoiceViewModel = viewModel()
+    RegistroCompraScreen(
+        onBack = { },
+        viewModel = viewModel,
+    )
 }

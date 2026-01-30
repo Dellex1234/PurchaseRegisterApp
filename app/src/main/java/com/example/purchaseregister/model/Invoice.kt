@@ -18,9 +18,3 @@ data class Invoice(
     var isSelected: Boolean = false,
     val productos: List<ProductItem> = emptyList()
 )
-
-data class ProductItem(
-    val descripcion: String,
-    val costoUnitario: String,
-    val cantidad: String
-)

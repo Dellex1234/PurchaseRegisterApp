@@ -33,7 +33,8 @@ fun AppNavHost() {
         registerPurchaseRoute(
             onBack = {
                 navController.popBackStack() // Regresa a la pantalla anterior
-            }
+            },
+            viewModel = viewModel
         )
 
         // 3. Pantalla de Detalle de Factura

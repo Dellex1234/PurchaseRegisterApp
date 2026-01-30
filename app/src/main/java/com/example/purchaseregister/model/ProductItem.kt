@@ -1,6 +1,9 @@
 package com.example.purchaseregister.model
 
-data class ProductoItem(
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class ProductItem(
     val descripcion: String,
     val costoUnitario: String,
     val cantidad: String

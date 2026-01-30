@@ -15,7 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.example.purchaseregister.model.ProductoItem
+import com.example.purchaseregister.model.ProductItem
 import com.example.purchaseregister.view.components.ReadOnlyField
 import com.example.purchaseregister.utils.SunatPrefs
 
@@ -49,8 +49,8 @@ fun DetailScreen(
 
     // 3. Lista de productos (puedes dejarla vacía o con un ítem base)
     val listaProductos = remember {
-        mutableStateListOf<ProductoItem>().apply {
-            add(ProductoItem(descripcion = "", costoUnitario = "", cantidad = ""))
+        mutableStateListOf<ProductItem>().apply {
+            add(ProductItem(descripcion = "", costoUnitario = "", cantidad = ""))
         }
     }
 

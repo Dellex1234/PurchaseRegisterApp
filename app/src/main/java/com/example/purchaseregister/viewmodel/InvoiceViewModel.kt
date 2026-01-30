@@ -74,6 +74,54 @@ class InvoiceViewModel : ViewModel() {
         }
     }
 
+    fun agregarNuevaFacturaCompra(
+        ruc: String,
+        razonSocial: String,
+        serie: String,
+        numero: String,
+        fechaEmision: String,
+        tipoDocumento: String,
+        moneda: String = "",
+        costoTotal: String = "",
+        igv: String = "",
+        importeTotal: String = "",
+        anio: String = "",
+        tipoCambio: String = ""
+    ) {
+        viewModelScope.launch {
+            println("🆕 [ViewModel] Agregando nueva factura COMPRA...")
+            println("📝 Datos: RUC=$ruc, Serie=$serie, Número=$numero, Fecha=$fechaEmision")
+            println("📝 Razón Social=$razonSocial, Tipo Doc=$tipoDocumento")
+
+            _facturasCompras.update { lista ->
+                // Generar un nuevo ID (máximo actual + 1)
+                val nuevoId = if (lista.isEmpty()) 1 else lista.maxOf { it.id } + 1
+
+                val nuevaFactura = Invoice(
+                    id = nuevoId,
+                    ruc = ruc,
+                    razonSocial = razonSocial,
+                    serie = serie,
+                    numero = numero,
+                    fechaEmision = fechaEmision,
+                    tipoDocumento = tipoDocumento,
+                    anio = anio,
+                    moneda = moneda,
+                    costoTotal = costoTotal,
+                    igv = igv,
+                    tipoCambio = tipoCambio,
+                    importeTotal = importeTotal,
+                    estado = "CONSULTADO", // Estado inicial
+                    isSelected = false,
+                    productos = emptyList() // Por ahora vacío
+                )
+
+                println("✅ [ViewModel] Nueva factura creada: ID=$nuevoId, RUC=$ruc, Serie=$serie-$numero")
+                lista + nuevaFactura
+            }
+        }
+    }
+
     // FUNCIÓN PRINCIPAL: Actualizar estado de una factura
     fun actualizarEstadoFactura(facturaId: Int, nuevoEstado: String, esCompra: Boolean) {
         println("🔄 [ViewModel] Llamando actualizarEstadoFactura")

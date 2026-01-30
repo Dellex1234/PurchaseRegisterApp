@@ -423,214 +423,214 @@ fun PurchaseDetailScreen(
                         }
                     }
 
-                        // CUERPO (Listado)
-                        Column(
-                            modifier = Modifier
-                                .width(totalWidth)
-                                .weight(1f)
-                                .verticalScroll(rememberScrollState())
-                        ) {
-                            if (!isListVisible) {
-                                Text(
-                                    "Presione Consultar para ver registros",
-                                    modifier = Modifier
-                                        .width(totalWidth)
-                                        .padding(20.dp),
-                                    textAlign = TextAlign.Center,
-                                    color = Color.Gray
-                                )
-                            } else if (listaFiltrada.isEmpty()) {
-                                Text(
-                                    "No hay resultados",
-                                    modifier = Modifier
-                                        .width(totalWidth)
-                                        .padding(20.dp),
-                                    textAlign = TextAlign.Center,
-                                    color = Color.Gray
-                                )
-                            } else {
-                                listaFiltrada.forEach { factura ->
-                                    // Agrega este log para ver el estado actual de cada factura
-                                    val estadoActual = if (sectionActive == Section.COMPRAS) {
-                                        facturasCompras.firstOrNull { it.id == factura.id }?.isSelected
-                                            ?: false
-                                    } else {
-                                        facturasVentas.firstOrNull { it.id == factura.id }?.isSelected
-                                            ?: false
-                                    }
-
-                                    println("🔘 [Checkbox] ID: ${factura.id}, Estado en listaFiltrada: ${factura.isSelected}, Estado real en ViewModel: $estadoActual")
-
-                                    Row(
-                                        modifier = Modifier
-                                            .width(totalWidth)
-                                            .background(if (estadoActual) Color(0xFFF5F5F5) else Color.Transparent)
-                                            .padding(vertical = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Box(
-                                            modifier = Modifier.width(50.dp),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Checkbox(
-                                                checked = estadoActual,  // ¡IMPORTANTE! Usar el estado real
-                                                onCheckedChange = { checked ->
-                                                    println("🔘 [Checkbox click] ID: ${factura.id}, Checked: $checked")
-                                                    if (sectionActive == Section.COMPRAS) {
-                                                        viewModel.actualizarSeleccionCompras(
-                                                            factura.id,
-                                                            checked
-                                                        )
-                                                    } else {
-                                                        viewModel.actualizarSeleccionVentas(
-                                                            factura.id,
-                                                            checked
-                                                        )
-                                                    }
-                                                }
-                                            )
-                                        }
-                                        SimpleTableCell(factura.ruc, 120.dp)
-                                        SimpleTableCell(factura.serie, 70.dp)
-                                        SimpleTableCell(factura.numero, 90.dp)
-                                        SimpleTableCell(factura.fechaEmision, 100.dp)
-                                        Box(
-                                            modifier = Modifier.width(100.dp),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            InvoiceStatusCell(factura.estado)
-                                        }
-                                        Box(
-                                            modifier = Modifier.width(120.dp),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            TextButton(onClick = {
-                                                onNavigateToDetalle(
-                                                    DetailRoute(
-                                                        id = factura.id,
-                                                        rucProveedor = factura.ruc,
-                                                        serie = factura.serie,
-                                                        numero = factura.numero,
-                                                        fecha = factura.fechaEmision,
-                                                        razonSocial = factura.razonSocial,
-                                                        tipoDocumento = factura.tipoDocumento,
-                                                        moneda = factura.moneda,
-                                                        costoTotal = factura.costoTotal,
-                                                        igv = factura.igv,
-                                                        importeTotal = factura.importeTotal,
-                                                        anio = factura.anio,
-                                                        tipoCambio = factura.tipoCambio,
-                                                        esCompra = (sectionActive == Section.COMPRAS)
-                                                    )
-                                                )
-                                            }) {
-                                                Text(
-                                                    "Detalle",
-                                                    fontSize = 12.sp,
-                                                    textDecoration = TextDecoration.Underline
-                                                )
-                                            }
-                                        }
-                                    }
-                                    Divider(
-                                        modifier = Modifier.width(totalWidth),
-                                        thickness = 0.5.dp,
-                                        color = Color.LightGray
-                                    )
-                                }
-                            }
-                        }
-                        // --- FOOTER
-                        if (isListVisible) {
-                            val seleccionados = listaFiltrada.count { factura ->
-                                val estadoReal = if (sectionActive == Section.COMPRAS) {
+                    // CUERPO (Listado)
+                    Column(
+                        modifier = Modifier
+                            .width(totalWidth)
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        if (!isListVisible) {
+                            Text(
+                                "Presione Consultar para ver registros",
+                                modifier = Modifier
+                                    .width(totalWidth)
+                                    .padding(20.dp),
+                                textAlign = TextAlign.Center,
+                                color = Color.Gray
+                            )
+                        } else if (listaFiltrada.isEmpty()) {
+                            Text(
+                                "No hay resultados",
+                                modifier = Modifier
+                                    .width(totalWidth)
+                                    .padding(20.dp),
+                                textAlign = TextAlign.Center,
+                                color = Color.Gray
+                            )
+                        } else {
+                            listaFiltrada.forEach { factura ->
+                                // Agrega este log para ver el estado actual de cada factura
+                                val estadoActual = if (sectionActive == Section.COMPRAS) {
                                     facturasCompras.firstOrNull { it.id == factura.id }?.isSelected
                                         ?: false
                                 } else {
                                     facturasVentas.firstOrNull { it.id == factura.id }?.isSelected
                                         ?: false
                                 }
-                                estadoReal
-                            }
-                            Row(
-                                modifier = Modifier
-                                    .width(totalWidth)
-                                    .background(Color.LightGray)
-                                    .padding(vertical = 10.dp, horizontal = 16.dp),
-                                horizontalArrangement = Arrangement.Start
-                            ) {
-                                Text(
-                                    text = when {
-                                        seleccionados == 1 -> "1 factura seleccionada de ${listaFiltrada.size}"
-                                        seleccionados > 1 -> "$seleccionados facturas seleccionadas de ${listaFiltrada.size}"
-                                        else -> "Facturas registradas: ${listaFiltrada.size}"
-                                    },
-                                    fontSize = 13.sp, fontWeight = FontWeight.Bold,
-                                    color = Color.Black
+
+                                println("🔘 [Checkbox] ID: ${factura.id}, Estado en listaFiltrada: ${factura.isSelected}, Estado real en ViewModel: $estadoActual")
+
+                                Row(
+                                    modifier = Modifier
+                                        .width(totalWidth)
+                                        .background(if (estadoActual) Color(0xFFF5F5F5) else Color.Transparent)
+                                        .padding(vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier.width(50.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Checkbox(
+                                            checked = estadoActual,  // ¡IMPORTANTE! Usar el estado real
+                                            onCheckedChange = { checked ->
+                                                println("🔘 [Checkbox click] ID: ${factura.id}, Checked: $checked")
+                                                if (sectionActive == Section.COMPRAS) {
+                                                    viewModel.actualizarSeleccionCompras(
+                                                        factura.id,
+                                                        checked
+                                                    )
+                                                } else {
+                                                    viewModel.actualizarSeleccionVentas(
+                                                        factura.id,
+                                                        checked
+                                                    )
+                                                }
+                                            }
+                                        )
+                                    }
+                                    SimpleTableCell(factura.ruc, 120.dp)
+                                    SimpleTableCell(factura.serie, 70.dp)
+                                    SimpleTableCell(factura.numero, 90.dp)
+                                    SimpleTableCell(factura.fechaEmision, 100.dp)
+                                    Box(
+                                        modifier = Modifier.width(100.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        InvoiceStatusCell(factura.estado)
+                                    }
+                                    Box(
+                                        modifier = Modifier.width(120.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        TextButton(onClick = {
+                                            onNavigateToDetalle(
+                                                DetailRoute(
+                                                    id = factura.id,
+                                                    rucProveedor = factura.ruc,
+                                                    serie = factura.serie,
+                                                    numero = factura.numero,
+                                                    fecha = factura.fechaEmision,
+                                                    razonSocial = factura.razonSocial,
+                                                    tipoDocumento = factura.tipoDocumento,
+                                                    moneda = factura.moneda,
+                                                    costoTotal = factura.costoTotal,
+                                                    igv = factura.igv,
+                                                    importeTotal = factura.importeTotal,
+                                                    anio = factura.anio,
+                                                    tipoCambio = factura.tipoCambio,
+                                                    esCompra = (sectionActive == Section.COMPRAS)
+                                                )
+                                            )
+                                        }) {
+                                            Text(
+                                                "Detalle",
+                                                fontSize = 12.sp,
+                                                textDecoration = TextDecoration.Underline
+                                            )
+                                        }
+                                    }
+                                }
+                                Divider(
+                                    modifier = Modifier.width(totalWidth),
+                                    thickness = 0.5.dp,
+                                    color = Color.LightGray
                                 )
                             }
                         }
                     }
+                    // --- FOOTER
+                    if (isListVisible) {
+                        val seleccionados = listaFiltrada.count { factura ->
+                            val estadoReal = if (sectionActive == Section.COMPRAS) {
+                                facturasCompras.firstOrNull { it.id == factura.id }?.isSelected
+                                    ?: false
+                            } else {
+                                facturasVentas.firstOrNull { it.id == factura.id }?.isSelected
+                                    ?: false
+                            }
+                            estadoReal
+                        }
+                        Row(
+                            modifier = Modifier
+                                .width(totalWidth)
+                                .background(Color.LightGray)
+                                .padding(vertical = 10.dp, horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.Start
+                        ) {
+                            Text(
+                                text = when {
+                                    seleccionados == 1 -> "1 factura seleccionada de ${listaFiltrada.size}"
+                                    seleccionados > 1 -> "$seleccionados facturas seleccionadas de ${listaFiltrada.size}"
+                                    else -> "Facturas registradas: ${listaFiltrada.size}"
+                                },
+                                fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                                color = Color.Black
+                            )
+                        }
+                    }
                 }
             }
+        }
 
-            // 3. BOTONES INFERIORES: CONSULTAR Y REGISTRAR
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Button(
-                    onClick = {
-                        val token = SunatPrefs.getToken(context)
-                        val ruc = SunatPrefs.getRuc(context)
-                        val user = SunatPrefs.getUser(context)
+        // 3. BOTONES INFERIORES: CONSULTAR Y REGISTRAR
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Button(
+                onClick = {
+                    val token = SunatPrefs.getToken(context)
+                    val ruc = SunatPrefs.getRuc(context)
+                    val user = SunatPrefs.getUser(context)
 
-                        println("SUNAT DATA → RUC: $ruc | USUARIO: $user | TOKEN: $token")
-                        if (token == null) {
-                            showSunatLogin = true // Abre el WebView si no hay hash
-                        } else {
-                            if (!hasLoadedSunatData) {
-                                hasLoadedSunatData = true
-                            }
-                            isLoading = true
-                            Handler(Looper.getMainLooper()).postDelayed({
-                                isListVisible = true
-                                isLoading = false
-                            }, 1000)
+                    println("SUNAT DATA → RUC: $ruc | USUARIO: $user | TOKEN: $token")
+                    if (token == null) {
+                        showSunatLogin = true // Abre el WebView si no hay hash
+                    } else {
+                        if (!hasLoadedSunatData) {
+                            hasLoadedSunatData = true
                         }
-                    },
+                        isLoading = true
+                        Handler(Looper.getMainLooper()).postDelayed({
+                            isListVisible = true
+                            isLoading = false
+                        }, 1000)
+                    }
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .height(45.dp),
+                shape = MaterialTheme.shapes.medium,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1FB8B9))
+            ) {
+                Text("Consultar", style = MaterialTheme.typography.titleMedium)
+            }
+            if (sectionActive == Section.COMPRAS) {
+                Button(
+                    onClick = onNavigateToRegistrar,
                     modifier = Modifier
                         .weight(1f)
                         .height(45.dp),
                     shape = MaterialTheme.shapes.medium,
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1FB8B9))
-                ) {
-                    Text("Consultar", style = MaterialTheme.typography.titleMedium)
-                }
-                if (sectionActive == Section.COMPRAS) {
-                    Button(
-                        onClick = onNavigateToRegistrar,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(45.dp),
-                        shape = MaterialTheme.shapes.medium,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1FB8B9))
-                    ) { Text("Subir Factura", style = MaterialTheme.typography.titleMedium) }
-                }
+                ) { Text("Subir Factura", style = MaterialTheme.typography.titleMedium) }
             }
         }
     }
+}
 
-    @Preview(showBackground = true, showSystemUi = true)
-    @Composable
-    fun PurchaseScreenPreview() {
-        val viewModel: InvoiceViewModel = viewModel()
-        PurchaseDetailScreen(
-            viewModel = viewModel,
-            onComprasClick = { },
-            onVentasClick = { },
-            onNavigateToRegistrar = { },
-            onNavigateToDetalle = { })
-    }
+@Preview(showBackground = true, showSystemUi = true)
+@Composable
+fun PurchaseScreenPreview() {
+    val viewModel: InvoiceViewModel = viewModel()
+    PurchaseDetailScreen(
+        viewModel = viewModel,
+        onComprasClick = { },
+        onVentasClick = { },
+        onNavigateToRegistrar = { },
+        onNavigateToDetalle = { })
+}

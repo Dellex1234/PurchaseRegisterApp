@@ -18,5 +18,5 @@ data class DetailRoute(
     val igv: String,
     val tipoCambio: String,
     val importeTotal: String,
-    val esCompra: Boolean = true
+    val esCompra: Boolean = true,
 )
