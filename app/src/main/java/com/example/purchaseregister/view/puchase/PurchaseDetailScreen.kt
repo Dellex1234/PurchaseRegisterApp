@@ -10,7 +10,6 @@ import android.provider.MediaStore
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -43,16 +42,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.Saver
 import com.example.purchaseregister.utils.SunatPrefs
 import com.example.purchaseregister.utils.SunatLoginDialog
+import com.example.purchaseregister.utils.DateRangeSelector
+import com.example.purchaseregister.utils.toFormattedDate
 
-// --- FUNCIÓN AUXILIAR PARA FORMATEAR FECHA ---
-fun Long?.toFormattedDate(): String {
-    if (this == null) return ""
-    val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
-    calendar.timeInMillis = this
-    val format = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
-    format.timeZone = TimeZone.getTimeZone("UTC")
-    return format.format(calendar.time)
-}
 val LongSaver = Saver<Long, Any>(
     save = { it },
     restore = { (it as? Long) ?: 0L }
@@ -79,7 +71,6 @@ fun PurchaseDetailScreen(
     var hasLoadedSunatData by rememberSaveable {
         mutableStateOf(SunatPrefs.getToken(context) != null)
     }
-
     var selectedStartMillis by rememberSaveable { mutableStateOf<Long?>(null) }
     var selectedEndMillis by rememberSaveable { mutableStateOf<Long?>(null) }
 
@@ -90,14 +81,12 @@ fun PurchaseDetailScreen(
             println("🔑 [PurchaseDetailScreen] Token encontrado, marcando datos como cargados")
         }
     }
-
     LaunchedEffect(selectedStartMillis) {
         if (selectedStartMillis != null && !isListVisible && hasLoadedSunatData) {
             println("🔄 Mostrando lista automáticamente (fecha seleccionada: ${selectedStartMillis!!.toFormattedDate()})")
             isListVisible = true
         }
     }
-
 
     val hoyMillis = remember {
         Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
@@ -107,21 +96,11 @@ fun PurchaseDetailScreen(
             set(Calendar.MILLISECOND, 0)
         }.timeInMillis
     }
+
     val dateRangePickerState = rememberDateRangePickerState(
         initialSelectedStartDateMillis = selectedStartMillis ?: hoyMillis,
         initialSelectedEndDateMillis = selectedEndMillis ?: hoyMillis
     )
-    var selectedDateRangeText by remember(selectedStartMillis, selectedEndMillis) {
-        mutableStateOf(
-            if (selectedStartMillis != null) {
-                val startStr = selectedStartMillis!!.toFormattedDate()
-                val endStr = selectedEndMillis?.toFormattedDate() ?: startStr
-                if (startStr == endStr) startStr else "$startStr - $endStr"
-            } else {
-                hoyMillis.toFormattedDate()
-            }
-        )
-    }
 
     val facturasCompras by viewModel.facturasCompras.collectAsStateWithLifecycle()
     val facturasVentas by viewModel.facturasVentas.collectAsStateWithLifecycle()
@@ -220,16 +199,6 @@ fun PurchaseDetailScreen(
                         selectedEndMillis = endMillisFromPicker
 
                         println("📅 [DATEPICKER] Fechas GUARDADAS en variables")
-
-                        // ACTUALIZAR TEXTO VISUAL
-                        val startStr = startMillisFromPicker.toFormattedDate()
-                        val endStr = endMillisFromPicker?.toFormattedDate() ?: startStr
-                        selectedDateRangeText = if (startStr == endStr) {
-                            startStr
-                        } else {
-                            "$startStr - $endStr"
-                        }
-                        println("📅 [DATEPICKER] Texto actualizado: $selectedDateRangeText")
                     }
                     showDatePicker = false
                 }) {
@@ -351,29 +320,13 @@ fun PurchaseDetailScreen(
                 )
             }
 
-            // Rectángulo para Rango de Fechas
-            Surface(
+            // NUEVO: Usa el componente DateRangeSelector en lugar del Surface
+            DateRangeSelector(
+                selectedStartMillis = selectedStartMillis,
+                selectedEndMillis = selectedEndMillis,
+                onDateRangeClick = { showDatePicker = true },
                 modifier = Modifier
-                    .width(200.dp)
-                    .height(45.dp)
-                    .border(1.dp, Color.Gray, MaterialTheme.shapes.medium)
-                    .clickable { showDatePicker = true },
-                shape = MaterialTheme.shapes.medium,
-                color = Color.White
-            ) {
-                Box(
-                    contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()
-                ) {
-                    Text(
-                        text = selectedDateRangeText,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color.Black,
-                        maxLines = 1,
-                        textAlign = TextAlign.Center,
-                    )
-                }
-            }
+            )
         }
 
         Spacer(modifier = Modifier.height(15.dp))

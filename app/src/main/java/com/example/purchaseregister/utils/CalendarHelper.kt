@@ -11,11 +11,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.*
 import java.text.SimpleDateFormat
 import java.util.*
 
-// Función de extensión para formatear fechas (igual que en tu código original)
+// Función de extensión para formatear fechas
 fun Long?.toFormattedDate(): String {
     if (this == null) return ""
     val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
@@ -25,8 +26,8 @@ fun Long?.toFormattedDate(): String {
     return format.format(calendar.time)
 }
 
-// Función auxiliar para obtener la fecha de hoy (mismo que en tu código)
-private fun getHoyMillis(): Long {
+// Función auxiliar para obtener la fecha de hoy
+fun getHoyMillis(): Long {
     return Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
         set(Calendar.HOUR_OF_DAY, 0)
         set(Calendar.MINUTE, 0)
@@ -35,123 +36,38 @@ private fun getHoyMillis(): Long {
     }.timeInMillis
 }
 
-// Clase que maneja el estado del diálogo de fecha
-
-class DateRangePickerState(
-    initialSelectedStartDateMillis: Long? = null,
-    initialSelectedEndDateMillis: Long? = null
-) {
-    var selectedStartMillis by mutableStateOf<Long?>(initialSelectedStartDateMillis)
-    var selectedEndMillis by mutableStateOf<Long?>(initialSelectedEndDateMillis)
-    var showDatePicker by mutableStateOf(false)
-
-    // Solo guardamos las fechas iniciales
-    private val _initialStart = initialSelectedStartDateMillis ?: getHoyMillis()
-    private val _initialEnd = initialSelectedEndDateMillis ?: getHoyMillis()
-
-    fun getInitialStartMillis(): Long = _initialStart
-    fun getInitialEndMillis(): Long = _initialEnd
-
-    fun getSelectedDateRangeText(): String {
-        return if (selectedStartMillis != null) {
-            val startStr = selectedStartMillis!!.toFormattedDate()
-            val endStr = selectedEndMillis?.toFormattedDate() ?: startStr
-            if (startStr == endStr) startStr else "$startStr - $endStr"
-        } else {
-            getHoyMillis().toFormattedDate()
-        }
-    }
-
-    fun onConfirmSelection(
-        startMillisFromPicker: Long?,
-        endMillisFromPicker: Long?
-    ) {
-        if (startMillisFromPicker != null) {
-            selectedStartMillis = startMillisFromPicker
-            selectedEndMillis = endMillisFromPicker
-        }
-        showDatePicker = false
-    }
-
-    fun reset() {
-        val hoyMillis = getHoyMillis()
-        selectedStartMillis = hoyMillis
-        selectedEndMillis = hoyMillis
-    }
-}
-
-//Función para recordar el estado del DateRangePicker
 @Composable
-fun rememberCustomDateRangePickerState(
-    initialSelectedStartDateMillis: Long? = null,
-    initialSelectedEndDateMillis: Long? = null
-): DateRangePickerState {
-    return remember {
-        DateRangePickerState(initialSelectedStartDateMillis, initialSelectedEndDateMillis)
-    }
-}
-
-// Diálogo de selección de rango de fechas
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun DateRangePickerDialog(
-    state: DateRangePickerState,
-    onDismissRequest: () -> Unit = { state.showDatePicker = false },
-    title: @Composable () -> Unit = { Text("Selecciona el rango", modifier = Modifier.padding(16.dp)) }
+fun AutoShowListEffect(
+    selectedStartMillis: Long?,
+    isListVisible: Boolean,
+    hasLoadedSunatData: Boolean,
+    onShowList: () -> Unit
 ) {
-    if (state.showDatePicker) {
-        // Creamos el estado del DateRangePicker AQUÍ DENTRO del composable
-        val materialDateRangePickerState = androidx.compose.material3.rememberDateRangePickerState(
-            initialSelectedStartDateMillis = state.getInitialStartMillis(),
-            initialSelectedEndDateMillis = state.getInitialEndMillis()
-        )
-
-        DatePickerDialog(
-            onDismissRequest = onDismissRequest,
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        state.onConfirmSelection(
-                            materialDateRangePickerState.selectedStartDateMillis,
-                            materialDateRangePickerState.selectedEndDateMillis
-                        )
-                        onDismissRequest()
-                    }
-                ) {
-                    Text(
-                        text = "Aceptar",
-                        color = Color(0xFF1FB8B9),
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = onDismissRequest) {
-                    Text(
-                        text = "Cancelar",
-                        color = Color(0xFFFF5A00),
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        ) {
-            DateRangePicker(
-                state = materialDateRangePickerState,
-                title = title,
-                showModeToggle = false,
-                modifier = Modifier.weight(1f)
-            )
+    LaunchedEffect(selectedStartMillis) {
+        if (selectedStartMillis != null && !isListVisible && hasLoadedSunatData) {
+            println("🔄 Mostrando lista automáticamente (fecha seleccionada: ${selectedStartMillis.toFormattedDate()})")
+            onShowList()
         }
     }
 }
 
-// Componente visual para mostrar el rango de fechas seleccionado
+// Clase SIMPLE para manejar solo el texto del rango de fechas
 @Composable
 fun DateRangeSelector(
-    state: DateRangePickerState,
+    selectedStartMillis: Long?,
+    selectedEndMillis: Long?,
     onDateRangeClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val hoyMillis = getHoyMillis()
+    val selectedDateRangeText = if (selectedStartMillis != null) {
+        val startStr = selectedStartMillis.toFormattedDate()
+        val endStr = selectedEndMillis?.toFormattedDate() ?: startStr
+        if (startStr == endStr) startStr else "$startStr - $endStr"
+    } else {
+        hoyMillis.toFormattedDate()
+    }
+
     Surface(
         modifier = modifier
             .width(200.dp)
@@ -165,7 +81,7 @@ fun DateRangeSelector(
             contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()
         ) {
             Text(
-                text = state.getSelectedDateRangeText(),
+                text = selectedDateRangeText,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
                 color = Color.Black,
