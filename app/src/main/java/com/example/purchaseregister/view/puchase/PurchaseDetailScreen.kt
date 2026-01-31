@@ -38,6 +38,17 @@ val LongSaver = Saver<Long, Any>(
     restore = { (it as? Long) ?: 0L }
 )
 
+private fun convertirFechaAPeriodo(millis: Long): String {
+    val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+        timeInMillis = millis
+    }
+    val year = calendar.get(Calendar.YEAR)
+    val month = calendar.get(Calendar.MONTH) + 1 // Enero es 0
+
+    // Formato YYYYMM (ej: 202512 para diciembre 2025)
+    return "${year}${String.format("%02d", month)}"
+}
+
 enum class Section { COMPRAS, VENTAS }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -61,6 +72,36 @@ fun PurchaseDetailScreen(
     }
     var selectedStartMillis by rememberSaveable { mutableStateOf<Long?>(null) }
     var selectedEndMillis by rememberSaveable { mutableStateOf<Long?>(null) }
+
+    // 🔴 IMPORTANTE: OBSERVAR ESTADOS DEL VIEWMODEL
+    val isLoadingViewModel by viewModel.isLoading.collectAsStateWithLifecycle()
+    val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
+    val facturasCompras by viewModel.facturasCompras.collectAsStateWithLifecycle()
+    val facturasVentas by viewModel.facturasVentas.collectAsStateWithLifecycle()
+
+    // 🔴 SINCRONIZAR LOADING CON VIEWMODEL
+    LaunchedEffect(isLoadingViewModel) {
+        isLoading = isLoadingViewModel
+        println("🔄 [PurchaseDetailScreen] Loading sincronizado: $isLoading")
+    }
+
+    // 🔴 MOSTRAR ERRORES
+    LaunchedEffect(errorMessage) {
+        errorMessage?.let { mensaje ->
+            Toast.makeText(context, "Error: $mensaje", Toast.LENGTH_LONG).show()
+            viewModel.limpiarError()
+            println("❌ [PurchaseDetailScreen] Error mostrado: $mensaje")
+        }
+    }
+
+    // 🔴 AUTO-MOSTRAR LISTA CUANDO LLEGAN DATOS
+    LaunchedEffect(facturasCompras, facturasVentas) {
+        val totalFacturas = if (sectionActive == Section.COMPRAS) facturasCompras.size else facturasVentas.size
+        if (totalFacturas > 0 && !isListVisible) {
+            isListVisible = true
+            println("📊 [PurchaseDetailScreen] Mostrando lista automáticamente: $totalFacturas facturas")
+        }
+    }
 
     LaunchedEffect(Unit) {
         // Si hay token, asumimos que los datos están cargados
@@ -90,9 +131,6 @@ fun PurchaseDetailScreen(
         initialSelectedEndDateMillis = selectedEndMillis ?: hoyMillis
     )
 
-    val facturasCompras by viewModel.facturasCompras.collectAsStateWithLifecycle()
-    val facturasVentas by viewModel.facturasVentas.collectAsStateWithLifecycle()
-
     LaunchedEffect(facturasCompras) {
         println("📊 [PurchaseDetailScreen] facturasCompras actualizadas: ${facturasCompras.size} elementos")
         facturasCompras.take(3).forEach { factura ->  // Mostrar solo las primeras 3
@@ -105,14 +143,6 @@ fun PurchaseDetailScreen(
         facturasVentas.take(3).forEach { factura ->  // Mostrar solo las primeras 3
             println("📊 [PurchaseDetailScreen] Factura VENTA: ID=${factura.id}, Estado=${factura.estado}")
         }
-    }
-
-    val facturasComprasMutable = remember(facturasCompras) {
-        facturasCompras.toMutableStateList()
-    }
-
-    val facturasVentasMutable = remember(facturasVentas) {
-        facturasVentas.toMutableStateList()
     }
 
     // --- LÓGICA DE FILTRADO ---
@@ -128,8 +158,14 @@ fun PurchaseDetailScreen(
         facturasVentas
     ) {
         derivedStateOf {
-            if (!hasLoadedSunatData) return@derivedStateOf emptyList<Invoice>()
-            if (!isListVisible) return@derivedStateOf emptyList<Invoice>()
+            if (!hasLoadedSunatData) {
+                println("⏳ [PurchaseDetailScreen] No hay datos SUNAT cargados")
+                return@derivedStateOf emptyList<Invoice>()
+            }
+            if (!isListVisible) {
+                println("👁️ [PurchaseDetailScreen] Lista no visible")
+                return@derivedStateOf emptyList<Invoice>()
+            }
 
             // Usar las fechas guardadas, no las del DatePickerState
             val start = selectedStartMillis ?: hoyMillis
@@ -140,9 +176,16 @@ fun PurchaseDetailScreen(
             }
 
             val facturasFiltradas = listaActualBase.filter { factura ->
-                val fechaFacturaTime = sdf.parse(factura.fechaEmision)?.time ?: 0L
-                fechaFacturaTime in start..end
+                try {
+                    val fechaFacturaTime = sdf.parse(factura.fechaEmision)?.time ?: 0L
+                    fechaFacturaTime in start..end
+                } catch (e: Exception) {
+                    println("⚠️ [PurchaseDetailScreen] Error parseando fecha: ${factura.fechaEmision}")
+                    false
+                }
             }
+
+            println("🔍 [PurchaseDetailScreen] Filtradas: ${facturasFiltradas.size} de ${listaActualBase.size}")
 
             facturasFiltradas.sortedBy { factura ->
                 try {
@@ -198,14 +241,21 @@ fun PurchaseDetailScreen(
             onLoginSuccess = {
                 showSunatLogin = false
                 hasLoadedSunatData = true
-                isLoading = true
+                println("✅ [PurchaseDetailScreen] Login SUNAT exitoso")
 
-                // Simulamos que la App está bajando las facturas de SUNAT
-                Handler(Looper.getMainLooper()).postDelayed({
-                    isListVisible = true
-                    isLoading = false // Quita el círculo y muestra la tabla
-                    Toast.makeText(context, "Sincronización completa", Toast.LENGTH_SHORT).show()
-                }, 2000)
+                // 🔴 AHORA CARGAMOS DATOS REALES DESPUÉS DEL LOGIN
+                val periodoInicio = convertirFechaAPeriodo(selectedStartMillis ?: hoyMillis)
+                val periodoFin = convertirFechaAPeriodo(selectedEndMillis ?: hoyMillis)
+
+                viewModel.cargarFacturasDesdeAPI(
+                    periodoInicio = periodoInicio,
+                    periodoFin = periodoFin,
+                    esCompra = (sectionActive == Section.COMPRAS)
+                )
+
+                isListVisible = true
+
+                Toast.makeText(context, "✅ Login exitoso. Cargando facturas...", Toast.LENGTH_SHORT).show()
             }
         )
     }
@@ -268,7 +318,7 @@ fun PurchaseDetailScreen(
 
         // Título Provisional
         Text(
-            text = "Registro Contable", // Aquí puedes cambiar el nombre
+            text = "Registro Contable",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(bottom = 15.dp)
@@ -356,7 +406,6 @@ fun PurchaseDetailScreen(
                 )
             }
 
-            // NUEVO: Usa el componente DateRangeSelector en lugar del Surface
             DateRangeSelector(
                 selectedStartMillis = selectedStartMillis,
                 selectedEndMillis = selectedEndMillis,
@@ -384,7 +433,7 @@ fun PurchaseDetailScreen(
                     CircularProgressIndicator(color = Color(0xFF1FB8B9))
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = "Sincronizando con SUNAT...",
+                        text = "Cargando facturas desde SUNAT...",
                         fontSize = 14.sp,
                         color = Color.Gray,
                         textAlign = TextAlign.Center
@@ -465,7 +514,7 @@ fun PurchaseDetailScreen(
                             )
                         } else if (listaFiltrada.isEmpty()) {
                             Text(
-                                "No hay resultados",
+                                "No hay facturas para mostrar",
                                 modifier = Modifier
                                     .width(totalWidth)
                                     .padding(20.dp),
@@ -497,7 +546,7 @@ fun PurchaseDetailScreen(
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Checkbox(
-                                            checked = estadoActual,  // ¡IMPORTANTE! Usar el estado real
+                                            checked = estadoActual,  // Usa el estado real
                                             onCheckedChange = { checked ->
                                                 println("🔘 [Checkbox click] ID: ${factura.id}, Checked: $checked")
                                                 if (sectionActive == Section.COMPRAS) {
@@ -600,17 +649,25 @@ fun PurchaseDetailScreen(
                     val user = SunatPrefs.getUser(context)
 
                     println("SUNAT DATA → RUC: $ruc | USUARIO: $user | TOKEN: $token")
+
                     if (token == null) {
                         showSunatLogin = true // Abre el WebView si no hay hash
                     } else {
-                        if (!hasLoadedSunatData) {
-                            hasLoadedSunatData = true
-                        }
-                        isLoading = true
-                        Handler(Looper.getMainLooper()).postDelayed({
-                            isListVisible = true
-                            isLoading = false
-                        }, 1000)
+                        // 1. Convertir fechas a formato YYYYMM
+                        val periodoInicio = convertirFechaAPeriodo(selectedStartMillis ?: hoyMillis)
+                        val periodoFin = convertirFechaAPeriodo(selectedEndMillis ?: hoyMillis)
+
+                        println("📅 Consultando período: $periodoInicio - $periodoFin")
+
+                        // 2. Llamar al ViewModel para cargar datos REALES
+                        viewModel.cargarFacturasDesdeAPI(
+                            periodoInicio = periodoInicio,
+                            periodoFin = periodoFin,
+                            esCompra = (sectionActive == Section.COMPRAS)
+                        )
+
+                        // 3. Mostrar la lista y estado de carga
+                        isListVisible = true
                     }
                 },
                 modifier = Modifier

@@ -74,6 +74,15 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.8.5")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // Retrofit para llamadas HTTP
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+    // Para corrutinas con Retrofit
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.4")
+    // Para interceptar y debuggear las llamadas HTTP (opcional pero útil)
+    implementation("com.squareup.okhttp3:logging-interceptor:4.10.0")
+
     implementation(libs.androidx.compose.ui.text)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

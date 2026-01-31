@@ -11,8 +11,39 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
+import retrofit2.http.GET
+import retrofit2.http.Query
+
+interface SunatApiService {
+    @GET("sunat/facturas")
+    suspend fun obtenerFacturas(
+        @Query("periodoInicio") periodoInicio: String,
+        @Query("periodoFin") periodoFin: String
+    ): SunatResponse
+}
+
+data class SunatResponse(
+    val success: Boolean,
+    val periodoInicio: String,
+    val periodoFin: String,
+    val resultados: List<SunatResultado>
+)
+
+data class SunatResultado(
+    val periodo: String,
+    val contenido: String
+)
 
 class InvoiceViewModel : ViewModel() {
+
+    private val retrofit = Retrofit.Builder()
+        .baseUrl("http://192.168.1.39:3043/") // Cambia a tu URL real
+        .addConverterFactory(GsonConverterFactory.create())
+        .build()
+
+    private val sunatApiService = retrofit.create(SunatApiService::class.java)
 
     // Estado observable de las facturas - COMPRAS
     private val _facturasCompras = MutableStateFlow<List<Invoice>>(emptyList())
@@ -22,59 +53,88 @@ class InvoiceViewModel : ViewModel() {
     private val _facturasVentas = MutableStateFlow<List<Invoice>>(emptyList())
     val facturasVentas: StateFlow<List<Invoice>> = _facturasVentas.asStateFlow()
 
-    init {
-        // Inicializar con datos de ejemplo cuando se crea el ViewModel
-        inicializarDatosEjemplo()
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+
+    fun cargarFacturasDesdeAPI(periodoInicio: String, periodoFin: String, esCompra: Boolean = true) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _errorMessage.value = null
+
+            try {
+                val response = sunatApiService.obtenerFacturas(periodoInicio, periodoFin)
+
+                if (response.success) {
+                    // 7. Parsear los datos del contenido
+                    val facturas = parsearContenidoSunat(response.resultados)
+
+                    if (esCompra) {
+                        _facturasCompras.value = facturas
+                    } else {
+                        _facturasVentas.value = facturas
+                    }
+                } else {
+                    _errorMessage.value = "Error en la respuesta del servidor"
+                }
+            } catch (e: Exception) {
+                _errorMessage.value = "Error al conectar con el servidor: ${e.message}"
+            } finally {
+                _isLoading.value = false
+            }
+        }
     }
 
-    private fun inicializarDatosEjemplo() {
-        viewModelScope.launch {
-            // FACTURAS DE COMPRAS
-            val compras = mutableListOf<Invoice>()
-            for (i in 1..10) {
-                compras.add(
-                    Invoice(
-                        id = i,
-                        ruc = "2060123456$i",
-                        serie = "F001",
-                        numero = "$i",
-                        fechaEmision = "22/01/2026",
-                        razonSocial = "PROV COMPRAS $i",
-                        tipoDocumento = "FACTURA",
-                        moneda = "Dòlares (USD)",
-                        costoTotal = "100.00",
-                        igv = "18.00",
-                        importeTotal = "118.00",
-                        estado = "CONSULTADO",  // ¡ESTADO INICIAL!
-                        isSelected = false
-                    )
-                )
-            }
-            _facturasCompras.value = compras
+    fun limpiarError() {
+        _errorMessage.value = null
+    }
 
-            // FACTURAS DE VENTAS
-            val ventas = mutableListOf<Invoice>()
-            for (i in 1..8) {
-                ventas.add(
-                    Invoice(
-                        id = i, // IDs diferentes para evitar conflictos
-                        ruc = "1040987654$i",
-                        serie = "V001",
-                        numero = "$i",
-                        fechaEmision = "22/01/2026",
-                        razonSocial = "CLIENTE VENTAS $i",
-                        tipoDocumento = "FACTURA",
-                        moneda = "Soles (PEN)",
-                        costoTotal = "200.00",
-                        igv = "36.00",
-                        importeTotal = "236.00",
-                        estado = "CONSULTADO",  // ¡ESTADO INICIAL!
-                        isSelected = false
-                    )
-                )
+    // 9. Función para parsear el contenido del API
+    private fun parsearContenidoSunat(resultados: List<SunatResultado>): List<Invoice> {
+        val facturas = mutableListOf<Invoice>()
+        var idCounter = 1
+
+        resultados.forEach { resultado ->
+            // El contenido tiene líneas separadas por saltos de línea
+            val lineas = resultado.contenido.split("\n")
+
+            // La primera línea son los encabezados, las siguientes son datos
+            if (lineas.size > 1) {
+                for (i in 1 until lineas.size) { // Empezar desde 1 para saltar encabezados
+                    val linea = lineas[i].trim()
+                    if (linea.isNotEmpty()) {
+                        val campos = linea.split("|")
+
+                        if (campos.size >= 25) { // Verificar que tenga los campos mínimos
+                            val factura = Invoice(
+                                id = idCounter++,
+                                ruc = campos.getOrElse(12) { "" }, // Nro Doc Identidad
+                                serie = campos.getOrElse(7) { "" }, // Serie del CDP
+                                numero = campos.getOrElse(9) { "" }, // Nro CP o Doc
+                                fechaEmision = campos.getOrElse(4) { "" }, // Fecha de emisión
+                                razonSocial = campos.getOrElse(13) { "" }, // Razón Social
+                                tipoDocumento = when(campos.getOrElse(6) { "" }) { // Tipo CP/Doc
+                                    "01" -> "FACTURA"
+                                    "03" -> "BOLETA"
+                                    else -> "DOCUMENTO"
+                                },
+                                moneda = campos.getOrElse(25) { "PEN" }, // Moneda
+                                costoTotal = campos.getOrElse(14) { "0.00" }, // BI Gravado DG
+                                igv = campos.getOrElse(15) { "0.00" }, // IGV / IPM DG
+                                importeTotal = campos.getOrElse(24) { "0.00" }, // Total CP
+                                estado = "CONSULTADO",
+                                isSelected = false
+                            )
+                            facturas.add(factura)
+                        }
+                    }
+                }
             }
-            _facturasVentas.value = ventas
         }
+
+        return facturas
     }
 
     fun agregarNuevaFacturaCompra(
