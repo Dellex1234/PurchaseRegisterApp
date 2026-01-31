@@ -37,22 +37,21 @@ fun DetailScreen(
     tipoCambio: String?,
     importeTotal: String?,
     esCompra: Boolean = true,
+    productos: List<ProductItem> = emptyList(),
     onAceptar: () -> Unit = {}
 ) {
     val context = LocalContext.current
 
     println("🎯 [DetailScreen] ID recibido: $id")
     println("🎯 [DetailScreen] esCompra: $esCompra")
+    println("🎯 [DetailScreen] Número de productos recibidos: ${productos.size}")
+
+    productos.forEachIndexed { index, producto ->
+        println("🎯 [DetailScreen] Producto $index: ${producto.descripcion}, ${producto.costoUnitario}, ${producto.cantidad}")
+    }
 
     // 1. Obtiene el RUC del usuario logueado. Si es null, muestra vacío.
     val rucPropio = remember { SunatPrefs.getRuc(context) ?: "" }
-
-    // 3. Lista de productos (puedes dejarla vacía o con un ítem base)
-    val listaProductos = remember {
-        mutableStateListOf<ProductItem>().apply {
-            add(ProductItem(descripcion = "", costoUnitario = "", cantidad = ""))
-        }
-    }
 
     Scaffold(
         topBar = {
@@ -167,12 +166,49 @@ fun DetailScreen(
                     modifier = Modifier
                         .weight(3f)
                         .fillMaxHeight(),
-                    isSingleLine = false
+                    isSingleLine = false,
+                    textAlign = TextAlign.Center
                 )
             }
 
             // --- FILA 4: DESCRIPCIÓN, COSTO UNIT, CANTIDAD ---
-            listaProductos.forEachIndexed { index, producto ->
+            if (productos.isNotEmpty()) {
+                productos.forEachIndexed { index, producto ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(IntrinsicSize.Max),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        ReadOnlyField(
+                            value = producto.descripcion,
+                            onValueChange = { },
+                            label = if (index == 0) "Descripción" else "",
+                            modifier = Modifier
+                                .weight(3f)
+                                .fillMaxHeight(),
+                            isSingleLine = false
+                        )
+                        ReadOnlyField(
+                            value = producto.costoUnitario,
+                            onValueChange = { },
+                            label = if (index == 0) "Costo Unit." else "",
+                            modifier = Modifier
+                                .weight(1.2f)
+                                .fillMaxHeight()
+                        )
+                        ReadOnlyField(
+                            value = producto.cantidad,
+                            onValueChange = { },
+                            label = if (index == 0) "Cant." else "",
+                            modifier = Modifier
+                                .weight(0.8f)
+                                .fillMaxHeight()
+                        )
+                    }
+                }
+            } else {
+                // Si no hay productos, mostrar un campo vacío
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -180,26 +216,26 @@ fun DetailScreen(
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     ReadOnlyField(
-                        value = producto.descripcion,
+                        value = "",
                         onValueChange = { },
-                        label = if (index == 0) "Descripción" else "",
+                        label = "Descripción",
                         modifier = Modifier
                             .weight(3f)
                             .fillMaxHeight(),
                         isSingleLine = false
                     )
                     ReadOnlyField(
-                        value = producto.costoUnitario,
+                        value = "",
                         onValueChange = { },
-                        label = if (index == 0) "Costo Unit." else "",
+                        label = "Costo Unit.",
                         modifier = Modifier
                             .weight(1.2f)
                             .fillMaxHeight()
                     )
                     ReadOnlyField(
-                        value = producto.cantidad,
+                        value = "",
                         onValueChange = { },
-                        label = if (index == 0) "Cant." else "",
+                        label = "Cant.",
                         modifier = Modifier
                             .weight(0.8f)
                             .fillMaxHeight()
@@ -301,6 +337,10 @@ fun DetailScreenPreview() {
         igv = "18.00",
         tipoCambio = "3.75",
         importeTotal = "118.00",
-        esCompra = true
+        esCompra = true,
+        productos = listOf(  // ← AÑADE PRODUCTOS PARA EL PREVIEW
+            ProductItem("Laptop Dell", "850.00", "1"),
+            ProductItem("Mouse Inalámbrico", "25.00", "2")
+        )
     )
 }

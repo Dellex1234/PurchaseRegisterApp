@@ -139,9 +139,17 @@ fun PurchaseDetailScreen(
                 timeZone = TimeZone.getTimeZone("UTC")
             }
 
-            listaActualBase.filter { factura ->
+            val facturasFiltradas = listaActualBase.filter { factura ->
                 val fechaFacturaTime = sdf.parse(factura.fechaEmision)?.time ?: 0L
                 fechaFacturaTime in start..end
+            }
+
+            facturasFiltradas.sortedBy { factura ->
+                try {
+                    sdf.parse(factura.fechaEmision)?.time ?: 0L
+                } catch (e: Exception) {
+                    0L
+                }
             }
         }
     }
@@ -157,6 +165,30 @@ fun PurchaseDetailScreen(
                 }
             }
         }
+    }
+
+    val facturasARegistrar by remember(
+        sectionActive,
+        listaFiltrada,
+        facturasCompras,
+        facturasVentas
+    ) {
+        derivedStateOf {
+            listaFiltrada.filter { factura ->
+                val estaSeleccionada = if (sectionActive == Section.COMPRAS) {
+                    facturasCompras.firstOrNull { it.id == factura.id }?.isSelected
+                        ?: false
+                } else {
+                    facturasVentas.firstOrNull { it.id == factura.id }?.isSelected
+                        ?: false
+                }
+                estaSeleccionada && factura.estado == "CON DETALLE"
+            }
+        }
+    }
+
+    val hayFacturasParaRegistrar by remember {
+        derivedStateOf { facturasARegistrar.isNotEmpty() }
     }
 
     // --- DIÁLOGO DEL WEBVIEW ---
@@ -381,26 +413,20 @@ fun PurchaseDetailScreen(
                             modifier = Modifier.width(120.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            val todasConDetalle = listaFiltrada.count { factura ->
-                                val estaSeleccionada = if (sectionActive == Section.COMPRAS) {
-                                    facturasCompras.firstOrNull { it.id == factura.id }?.isSelected
-                                        ?: false
-                                } else {
-                                    facturasVentas.firstOrNull { it.id == factura.id }?.isSelected
-                                        ?: false
-                                }
-
-                                // Solo verificar las que están seleccionadas
-                                estaSeleccionada && factura.estado == "CON DETALLE"
-                            }
-
-                            val haySeleccionadas = todasConDetalle > 0
-
                             Button(
                                 onClick = {
+                                    // Actualizar el estado de cada factura a "REGISTRADO"
+                                    facturasARegistrar.forEach { factura ->
+                                        viewModel.actualizarEstadoFactura(
+                                            facturaId = factura.id,
+                                            nuevoEstado = "REGISTRADO",
+                                            esCompra = (sectionActive == Section.COMPRAS)
+                                        )
+                                    }
+
                                     Toast.makeText(
                                         context,
-                                        "✅ Se ha registrado $todasConDetalle factura(s) exitosamente",
+                                        "✅ Se ha registrado ${facturasARegistrar.size} factura(s) exitosamente",
                                         Toast.LENGTH_SHORT
                                     ).show()
                                 },
@@ -408,11 +434,9 @@ fun PurchaseDetailScreen(
                                     .height(36.dp)
                                     .width(150.dp),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (haySeleccionadas) Color(
-                                        0xFF1FB8B9
-                                    ) else Color.Gray
+                                    containerColor = if (hayFacturasParaRegistrar) Color(0xFF1FB8B9) else Color.Gray
                                 ),
-                                enabled = haySeleccionadas
+                                enabled = hayFacturasParaRegistrar
                             ) {
                                 Text(
                                     text = "Registrar",
@@ -508,18 +532,6 @@ fun PurchaseDetailScreen(
                                             onNavigateToDetalle(
                                                 DetailRoute(
                                                     id = factura.id,
-                                                    rucProveedor = factura.ruc,
-                                                    serie = factura.serie,
-                                                    numero = factura.numero,
-                                                    fecha = factura.fechaEmision,
-                                                    razonSocial = factura.razonSocial,
-                                                    tipoDocumento = factura.tipoDocumento,
-                                                    moneda = factura.moneda,
-                                                    costoTotal = factura.costoTotal,
-                                                    igv = factura.igv,
-                                                    importeTotal = factura.importeTotal,
-                                                    anio = factura.anio,
-                                                    tipoCambio = factura.tipoCambio,
                                                     esCompra = (sectionActive == Section.COMPRAS)
                                                 )
                                             )

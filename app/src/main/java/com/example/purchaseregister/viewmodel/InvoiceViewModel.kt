@@ -1,13 +1,16 @@
 package com.example.purchaseregister.viewmodel
 
+import java.util.Locale
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.purchaseregister.model.Invoice
+import com.example.purchaseregister.model.ProductItem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
 
 class InvoiceViewModel : ViewModel() {
 
@@ -86,12 +89,14 @@ class InvoiceViewModel : ViewModel() {
         igv: String = "",
         importeTotal: String = "",
         anio: String = "",
-        tipoCambio: String = ""
+        tipoCambio: String = "",
+        productos: List<ProductItem> = emptyList()
     ) {
         viewModelScope.launch {
             println("🆕 [ViewModel] Agregando nueva factura COMPRA...")
             println("📝 Datos: RUC=$ruc, Serie=$serie, Número=$numero, Fecha=$fechaEmision")
             println("📝 Razón Social=$razonSocial, Tipo Doc=$tipoDocumento")
+            println("📝 Productos: ${productos.size} productos")
 
             _facturasCompras.update { lista ->
                 // Generar un nuevo ID (máximo actual + 1)
@@ -113,11 +118,16 @@ class InvoiceViewModel : ViewModel() {
                     importeTotal = importeTotal,
                     estado = "CONSULTADO", // Estado inicial
                     isSelected = false,
-                    productos = emptyList() // Por ahora vacío
+                    productos = productos // Por ahora vacío
                 )
 
-                println("✅ [ViewModel] Nueva factura creada: ID=$nuevoId, RUC=$ruc, Serie=$serie-$numero")
-                lista + nuevaFactura
+                (lista + nuevaFactura).sortedBy { factura ->
+                    try {
+                        SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).parse(factura.fechaEmision)?.time ?: 0L
+                    } catch (e: Exception) {
+                        0L
+                    }
+                }
             }
         }
     }

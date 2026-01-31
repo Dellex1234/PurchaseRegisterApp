@@ -1,6 +1,7 @@
 package com.example.purchaseregister.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.material3.Text // ← AÑADIR ESTE IMPORT
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -43,37 +44,49 @@ fun AppNavHost() {
 
             println("🎯 [AppNavHost] Recibiendo DetailRoute:")
             println("🎯 [AppNavHost] - ID: ${args.id}")
-            println("🎯 [AppNavHost] - RUC: ${args.rucProveedor}")
             println("🎯 [AppNavHost] - esCompra: ${args.esCompra}")
 
-            DetailScreen(
-                id = args.id,
-                onBack = {
-                    println("🔙 [AppNavHost] Navegando BACK desde DetailScreen")
-                    navController.popBackStack()
-                },
-                rucProveedor = args.rucProveedor,
-                serie = args.serie,
-                numero = args.numero,
-                fecha = args.fecha,
-                razonSocial = args.razonSocial,
-                tipoDocumento = args.tipoDocumento,
-                anio = args.anio,
-                moneda = args.moneda,
-                costoTotal = args.costoTotal,
-                igv = args.igv,
-                tipoCambio = args.tipoCambio,
-                importeTotal = args.importeTotal,
-                esCompra = args.esCompra,
-                onAceptar = {
-                    println("✅ [AppNavHost] onAceptar llamado")
-                    println("✅ [AppNavHost] Actualizando factura ID: ${args.id}")
-                    println("✅ [AppNavHost] Estado nuevo: CON DETALLE")
-                    println("✅ [AppNavHost] esCompra: ${args.esCompra}")
-                    // ¡AQUÍ ACTUALIZAMOS EL ESTADO!
-                    viewModel.actualizarEstadoFactura(args.id, "CON DETALLE", args.esCompra)
-                }
-            )
+            // Buscar la factura completa en el ViewModel usando el ID
+            val factura = if (args.esCompra) {
+                viewModel.facturasCompras.value.firstOrNull { it.id == args.id }
+            } else {
+                viewModel.facturasVentas.value.firstOrNull { it.id == args.id }
+            }
+
+            if (factura != null) {
+                DetailScreen(
+                    id = factura.id,
+                    onBack = {
+                        println("🔙 [AppNavHost] Navegando BACK desde DetailScreen")
+                        navController.popBackStack()
+                    },
+                    rucProveedor = factura.ruc,
+                    serie = factura.serie,
+                    numero = factura.numero,
+                    fecha = factura.fechaEmision,
+                    razonSocial = factura.razonSocial,
+                    tipoDocumento = factura.tipoDocumento,
+                    anio = factura.anio,
+                    moneda = factura.moneda,
+                    costoTotal = factura.costoTotal,
+                    igv = factura.igv,
+                    tipoCambio = factura.tipoCambio,
+                    importeTotal = factura.importeTotal,
+                    esCompra = args.esCompra,
+                    productos = factura.productos, // ← PASAR LISTA REAL DE PRODUCTOS
+                    onAceptar = {
+                        println("✅ [AppNavHost] onAceptar llamado")
+                        println("✅ [AppNavHost] Actualizando factura ID: ${factura.id}")
+                        println("✅ [AppNavHost] Estado nuevo: CON DETALLE")
+                        println("✅ [AppNavHost] esCompra: ${args.esCompra}")
+                        // ¡AQUÍ ACTUALIZAMOS EL ESTADO!
+                        viewModel.actualizarEstadoFactura(factura.id, "CON DETALLE", args.esCompra)
+                    }
+                )
+            } else {
+                // Mostrar mensaje de error
+                Text("Factura no encontrada")
+            }
         }
     }
 }

@@ -1,5 +1,8 @@
 package com.example.purchaseregister.model
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class Invoice(
     val id: Int,
     val ruc: String,

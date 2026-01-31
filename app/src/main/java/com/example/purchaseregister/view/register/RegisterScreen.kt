@@ -190,7 +190,7 @@ private fun tryModelsFast(
     })
 }
 
-// FUNCIÓN MEJORADA PARA EXTRAER JSON
+// FUNCIÓN PARA EXTRAER JSON
 fun extractJsonFromGeminiResponse(response: String): String {
     return try {
         // Parsear la respuesta completa
@@ -483,6 +483,7 @@ fun RegistroCompraScreen(
 
                         // Parsear el JSON real
                         val json = JSONObject(jsonText)
+                        Log.d("GEMINI_JSON_KEYS", "Claves en JSON: ${json.keys().asSequence().toList()}")
 
                         // Extraer datos
                         tipoDocumento = json.optString("tipo_documento")
@@ -494,6 +495,35 @@ fun RegistroCompraScreen(
                         val monedaExtraida = json.optString("moneda")
                         moneda = formatearMoneda(monedaExtraida)
                         val tipoCambioExtraido = json.optString("tipo_cambio")
+
+                        val productosArray = json.optJSONArray("productos")
+                        if (productosArray != null) {
+                            Log.d("GEMINI_PRODUCTOS", "Número de productos: ${productosArray.length()}")
+
+                            for (i in 0 until productosArray.length()) {
+                                val producto = productosArray.getJSONObject(i)
+                                Log.d("GEMINI_PRODUCTOS",
+                                    "Producto $i: desc=${producto.optString("descripcion")}, " +
+                                            "costo=${producto.optString("costo_unitario")}, " +
+                                            "cant=${producto.optString("cantidad")}")
+                            }
+                        } else {
+                            Log.w("GEMINI_PRODUCTOS", "⚠️ No se encontró array 'productos' en la respuesta")
+                            Log.w("GEMINI_PRODUCTOS", "Buscando variantes de nombre...")
+
+                            // Intentar con diferentes nombres de clave
+                            val posiblesNombres = listOf("productos", "items", "product_list", "articulos", "items_list")
+                            posiblesNombres.forEach { nombre ->
+                                if (json.has(nombre)) {
+                                    Log.d("GEMINI_PRODUCTOS", "Encontrado con nombre alternativo: $nombre")
+                                    val arrayAlternativo = json.optJSONArray(nombre)
+                                    if (arrayAlternativo != null) {
+                                        Log.d("GEMINI_PRODUCTOS", "Número de productos en '$nombre': ${arrayAlternativo.length()}")
+                                    }
+                                }
+                            }
+                        }
+
                         if (esMonedaDolares(moneda)) {
                             // Validar si Gemini extrajo un valor numérico válido
                             tipoCambio = when {
@@ -533,6 +563,9 @@ fun RegistroCompraScreen(
                         importeTotal = limpiarMonto(json.optString("importe_total"))
                         rucPropio = SunatPrefs.getRuc(context) ?: ""
 
+                        Log.d("GEMINI_MONTOS",
+                            "CostoTotal: $costoTotal, IGV: $igv, ImporteTotal: $importeTotal")
+
                         // Procesar productos
                         listaProductos.clear()
                         json.optJSONArray("productos")?.let { arr ->
@@ -546,10 +579,13 @@ fun RegistroCompraScreen(
                                     )
                                 )
                             }
+                            Log.d("GEMINI_PRODUCTOS",
+                                "Productos agregados a lista: ${listaProductos.size}")
                         }
 
                         // Si no hay productos, mantener al menos uno vacío
                         if (listaProductos.isEmpty()) {
+                            Log.w("GEMINI_PRODUCTOS", "⚠️ Lista de productos vacía, agregando uno vacío")
                             listaProductos.add(ProductItem("", "", ""))
                         }
 
@@ -893,7 +929,8 @@ fun RegistroCompraScreen(
                                 igv = igv,
                                 importeTotal = importeTotal,
                                 anio = if (esImportacion) anioImportacion else "",
-                                tipoCambio = tipoCambio
+                                tipoCambio = tipoCambio,
+                                productos = listaProductos
                             )
 
                             Toast.makeText(
