@@ -18,9 +18,12 @@ import retrofit2.http.GET
 import retrofit2.http.Query
 import retrofit2.http.POST
 import retrofit2.http.Body
+import retrofit2.http.Headers
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import java.util.concurrent.TimeUnit
+import java.util.Date
+import android.content.Context
 
 interface SunatApiService {
     @GET("sunat/facturas")
@@ -33,6 +36,12 @@ interface SunatApiService {
     suspend fun obtenerDetalleFacturaXml(
         @Body request: DetalleFacturaRequest
     ): DetalleFacturaXmlResponse
+
+    @POST("factura/procesarFactura")
+    @Headers("Content-Type: application/json")
+    suspend fun registrarFacturasEnBD(
+        @Body request: RegistroFacturasRequest
+    ): RegistroFacturasResponse
 }
 
 data class DetalleFacturaRequest(
@@ -102,6 +111,43 @@ data class ContenidoItem(
     val estado: String
 )
 
+data class ProductoParaRegistrar(
+    val descripcion: String,
+    val cantidad: String,
+    val costoUnitario: String,
+    val unidadMedida: String
+)
+
+data class FacturaParaRegistrar(
+    val id: Int,
+    val rucEmisor: String,
+    val serie: String,
+    val numero: String,
+    val fechaEmision: String,
+    val razonSocial: String,
+    val tipoDocumento: String,
+    val moneda: String,
+    val costoTotal: String,
+    val igv: String,
+    val importeTotal: String,
+    val productos: List<ProductoParaRegistrar>
+)
+
+data class RegistroFacturasRequest(
+    val facturas: List<FacturaParaRegistrar>
+)
+
+data class RegistroFacturasResponse(
+    val message: String,
+    val resultados: List<ResultadoRegistro>
+)
+
+data class ResultadoRegistro(
+    val success: Boolean,
+    val id: Int,
+    val numeroComprobante: String
+)
+
 class InvoiceViewModel : ViewModel() {
 
     private fun createOkHttpClient(): OkHttpClient {
@@ -110,15 +156,15 @@ class InvoiceViewModel : ViewModel() {
         }
 
         return OkHttpClient.Builder()
-            .addInterceptor(logging) // Agregar logging
-            .connectTimeout(90, TimeUnit.SECONDS) // 90 segundos para conectar
-            .readTimeout(90, TimeUnit.SECONDS)    // 90 segundos para leer respuesta
-            .writeTimeout(90, TimeUnit.SECONDS)   // 90 segundos para escribir
+            .addInterceptor(logging)
+            .connectTimeout(90, TimeUnit.SECONDS)
+            .readTimeout(90, TimeUnit.SECONDS)
+            .writeTimeout(90, TimeUnit.SECONDS)
             .build()
     }
 
     private val retrofit = Retrofit.Builder()
-        .baseUrl("http://192.168.1.39:3043/") // Cambia a tu URL real
+        .baseUrl("http://192.168.1.85:3043/") // Cambia a tu URL real
         .addConverterFactory(GsonConverterFactory.create())
         .client(createOkHttpClient())
         .build()
@@ -138,7 +184,92 @@ class InvoiceViewModel : ViewModel() {
 
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+
+    private val _registroCompletado = MutableStateFlow(false)
+    val registroCompletado: StateFlow<Boolean> = _registroCompletado.asStateFlow()
+
     private val _rucEmisores = mutableMapOf<Int, String>()
+
+    fun registrarFacturasEnBaseDeDatos(
+        facturas: List<Invoice>,
+        esCompra: Boolean,
+        context: Context
+    ) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _errorMessage.value = null
+            _registroCompletado.value = false
+
+            try {
+                println("📤 [ViewModel] Preparando ${facturas.size} facturas para registrar en BD...")
+                // Obtener datos del usuario actual
+                val facturasParaRegistrar = facturas.map { factura ->
+                    FacturaParaRegistrar(
+                        id = factura.id,
+                        rucEmisor = factura.ruc,           // RUC del proveedor (emisor)
+                        serie = factura.serie,
+                        numero = factura.numero,
+                        fechaEmision = factura.fechaEmision,
+                        razonSocial = factura.razonSocial, // Nombre del proveedor
+                        tipoDocumento = factura.tipoDocumento,
+                        moneda = factura.moneda,
+                        costoTotal = factura.costoTotal,
+                        igv = factura.igv,
+                        importeTotal = factura.importeTotal,
+                        productos = factura.productos.map { producto ->
+                            ProductoParaRegistrar(
+                                descripcion = producto.descripcion,
+                                cantidad = producto.cantidad,
+                                costoUnitario = producto.costoUnitario,
+                                unidadMedida = producto.unidadMedida
+                            )
+                        }
+                    )
+                }
+
+                println("📤 [ViewModel] Enviando ${facturasParaRegistrar.size} facturas a BD...")
+
+                val request = RegistroFacturasRequest(facturas = facturasParaRegistrar)
+                val response = sunatApiService.registrarFacturasEnBD(request)
+
+                val todosExitosos = response.resultados.all { it.success }
+                val facturasRegistradas = response.resultados.count { it.success }
+
+                if (todosExitosos) {
+                    println("✅ [ViewModel] Facturas registradas en BD: $facturasRegistradas")
+                    println("✅ Mensaje del servidor: ${response.message}")
+
+                    response.resultados.forEach { resultado ->
+                        println("✅   Factura ${resultado.numeroComprobante} registrada con ID: ${resultado.id}")
+                    }
+
+                    facturas.forEach { factura ->
+                        actualizarEstadoFactura(factura.id, "REGISTRADO", esCompra)
+                    }
+
+                    _registroCompletado.value = true
+
+                } else {
+                    val errores = response.resultados.filter { !it.success }
+                    val errorMsg = "Algunas facturas no se pudieron registrar: ${errores.map { it.numeroComprobante }}"
+                    println("❌ [ViewModel] $errorMsg")
+                    _errorMessage.value = errorMsg
+                }
+
+            } catch (e: Exception) {
+                val errorMsg = "Error de conexión al registrar en BD: ${e.message}"
+                println("❌ [ViewModel] $errorMsg")
+                _errorMessage.value = errorMsg
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    // Función para resetear el estado de registro
+    fun resetRegistroCompletado() {
+        _registroCompletado.value = false
+    }
 
     fun cargarFacturasDesdeAPI(periodoInicio: String, periodoFin: String, esCompra: Boolean = true) {
         viewModelScope.launch {

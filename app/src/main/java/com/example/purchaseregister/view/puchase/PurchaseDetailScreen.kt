@@ -63,6 +63,7 @@ fun PurchaseDetailScreen(
 ) {
     println("🔄 [PurchaseDetailScreen] INICIO - Pantalla se está COMPONIENDO/RECREANDO")
     val context = LocalContext.current
+
     var sectionActive by remember { mutableStateOf(Section.COMPRAS) }
     var isListVisible by rememberSaveable { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
@@ -80,11 +81,18 @@ fun PurchaseDetailScreen(
     var facturaCargandoId by remember { mutableStateOf<Int?>(null) }
     var esCompraCargando by remember { mutableStateOf(false) }
 
+    // ✅ NUEVAS VARIABLES PARA REGISTRO
+    var showRegistroDialog by remember { mutableStateOf(false) }
+    var registroStatus by remember { mutableStateOf("Registrando facturas en el sistema...") }
+    var registroDebugInfo by remember { mutableStateOf<String?>(null) }
+    var facturasRegistrando by remember { mutableStateOf<List<Invoice>>(emptyList()) }
+
     // 🔴 IMPORTANTE: OBSERVAR ESTADOS DEL VIEWMODEL
     val isLoadingViewModel by viewModel.isLoading.collectAsStateWithLifecycle()
     val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
     val facturasCompras by viewModel.facturasCompras.collectAsStateWithLifecycle()
     val facturasVentas by viewModel.facturasVentas.collectAsStateWithLifecycle()
+    val registroCompletado by viewModel.registroCompletado.collectAsStateWithLifecycle()
 
     LaunchedEffect(isLoadingViewModel) {
         // 1. Sincronizar isLoading para mostrar el loading en la tabla
@@ -110,6 +118,38 @@ fun PurchaseDetailScreen(
                 }
                 facturaCargandoId = null
             }, 1500) // 1.5 segundos para mostrar que terminó
+        }
+    }
+
+    // Manejar el estado de registro
+    LaunchedEffect(registroCompletado) {
+        if (registroCompletado) {
+            println("✅ [PurchaseDetailScreen] Registro completado exitosamente")
+            registroStatus = "✅ Registro completado exitosamente"
+
+            // Esperar 2 segundos y cerrar el diálogo
+            Handler(Looper.getMainLooper()).postDelayed({
+                showRegistroDialog = false
+                registroDebugInfo = null
+                facturasRegistrando = emptyList()
+                viewModel.resetRegistroCompletado()
+            }, 2000)
+        }
+    }
+
+    // Manejar errores durante el registro
+    LaunchedEffect(errorMessage) {
+        errorMessage?.let { mensaje ->
+            if (showRegistroDialog) {
+                registroStatus = "❌ Error: $mensaje"
+                // Esperar 3 segundos y cerrar
+                Handler(Looper.getMainLooper()).postDelayed({
+                    showRegistroDialog = false
+                    registroDebugInfo = null
+                    facturasRegistrando = emptyList()
+                    viewModel.limpiarError()
+                }, 3000)
+            }
         }
     }
 
@@ -352,11 +392,25 @@ fun PurchaseDetailScreen(
         FacturaLoadingDialog(
             isLoading = showLoadingDialog,
             statusMessage = loadingStatus,
+            debugInfo = loadingDebugInfo,
             onDismiss = {
                 showLoadingDialog = false
                 loadingDebugInfo = null
                 facturaCargandoId = null
             }
+        )
+
+        FacturaLoadingDialog(
+            isLoading = showRegistroDialog,
+            statusMessage = registroStatus,
+            debugInfo = registroDebugInfo,
+            onDismiss = {
+                showRegistroDialog = false
+                registroDebugInfo = null
+                facturasRegistrando = emptyList()
+            },
+            title = "Registro de Facturas",
+            showSubMessage = false
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -509,6 +563,10 @@ fun PurchaseDetailScreen(
                         ) {
                             Button(
                                 onClick = {
+                                    facturasRegistrando = facturasARegistrar
+                                    showRegistroDialog = true
+                                    registroStatus = "Registrando ${facturasARegistrar.size} factura(s) en el sistema..."
+
                                     // Actualizar el estado de cada factura a "REGISTRADO"
                                     facturasARegistrar.forEach { factura ->
                                         viewModel.actualizarEstadoFactura(
@@ -518,17 +576,24 @@ fun PurchaseDetailScreen(
                                         )
                                     }
 
+                                    viewModel.registrarFacturasEnBaseDeDatos(
+                                        facturas = facturasARegistrar,
+                                        esCompra = (sectionActive == Section.COMPRAS),
+                                        context = context
+                                    )
+
                                     val mensaje = when (facturasARegistrar.size) {
                                         0 -> "No hay facturas con detalle para registrar"
                                         1 -> "✅ Se ha registrado 1 factura exitosamente"
                                         else -> "✅ Se han registrado ${facturasARegistrar.size} facturas exitosamente"
                                     }
 
-                                    Toast.makeText(
-                                        context,
-                                        mensaje,
-                                        Toast.LENGTH_SHORT
-                                    ).show()
+                                    if (facturasARegistrar.isEmpty()) {
+                                        Toast.makeText(context, mensaje, Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        // Para facturas > 0, el diálogo ya muestra el progreso
+                                        println("📤 [PurchaseDetailScreen] Iniciando registro de ${facturasARegistrar.size} facturas")
+                                    }
                                 },
                                 modifier = Modifier
                                     .height(36.dp)
@@ -771,7 +836,7 @@ fun PurchaseDetailScreen(
                         viewModel.cargarFacturasDesdeAPI(
                             periodoInicio = periodoInicio,
                             periodoFin = periodoFin,
-                            esCompra = (sectionActive == Section.COMPRAS)
+                            esCompra = (sectionActive == Section.COMPRAS),
                         )
 
                         // 3. Mostrar la lista y estado de carga
