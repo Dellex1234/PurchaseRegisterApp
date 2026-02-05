@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -18,10 +19,10 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun ReadOnlyField(
     value: String,
-    onValueChange: (String) -> Unit, // Permite actualizar el texto
+    onValueChange: (String) -> Unit,
     label: String,
     modifier: Modifier = Modifier,
-    isReadOnly: Boolean = true,      // Controla si se puede editar
+    isReadOnly: Boolean = true,
     isHighlight: Boolean = false,
     isSingleLine: Boolean = true,
     textAlign: TextAlign = if (isSingleLine) TextAlign.Center else TextAlign.Start
@@ -32,7 +33,6 @@ fun ReadOnlyField(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(
-                        // Cambiamos el color de la etiqueta si es editable para dar feedback
                         color = if (isReadOnly) Color(0xFFF5F5F5) else Color(0xFFE0F7F7),
                         shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp)
                     )
@@ -52,29 +52,57 @@ fun ReadOnlyField(
             }
         }
 
-        OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
-            readOnly = isReadOnly,
+        // Usar Box con BasicTextField para control total del padding
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(),
-            textStyle = LocalTextStyle.current.copy(
-                fontSize = 10.sp,
-                textAlign = textAlign
-            ),
-            shape = if (label.isNotEmpty())
-                RoundedCornerShape(bottomStart = 8.dp, bottomEnd = 8.dp)
-            else RoundedCornerShape(8.dp),
-            colors = TextFieldDefaults.colors(
-                // Si es editable, ponemos fondo blanco; si es lectura, grisáceo
-                focusedContainerColor = if (isReadOnly) Color(0xFFF5F5F5) else Color.White,
-                unfocusedContainerColor = if (isReadOnly) Color(0xFFF5F5F5) else Color.White,
-                focusedIndicatorColor = if (isHighlight) Color(0xFFFF5A00) else Color(0xFF1FB8B9),
-                unfocusedIndicatorColor = Color.LightGray
-            ),
-            singleLine = isSingleLine,
-            maxLines = if (isSingleLine) 1 else 3
-        )
+                .fillMaxHeight()
+                .border(
+                    width = 1.dp,
+                    color = if (isHighlight) Color(0xFFFF5A00) else Color.LightGray,
+                    shape = if (label.isNotEmpty())
+                        RoundedCornerShape(bottomStart = 8.dp, bottomEnd = 8.dp)
+                    else RoundedCornerShape(8.dp)
+                )
+                .background(
+                    color = if (isReadOnly) Color(0xFFF5F5F5) else Color.White,
+                    shape = if (label.isNotEmpty())
+                        RoundedCornerShape(bottomStart = 8.dp, bottomEnd = 8.dp)
+                    else RoundedCornerShape(8.dp)
+                )
+                .padding(vertical = 6.dp, horizontal = 10.dp),
+            contentAlignment = when (textAlign) {
+                TextAlign.Center -> Alignment.Center
+                TextAlign.End -> Alignment.CenterEnd
+                else -> Alignment.CenterStart
+            }
+        ) {
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                readOnly = isReadOnly,
+                modifier = Modifier.fillMaxWidth(),
+                textStyle = LocalTextStyle.current.copy(
+                    fontSize = 10.sp,
+                    textAlign = textAlign,
+                    color = Color.Black
+                ),
+                singleLine = isSingleLine,
+                maxLines = if (isSingleLine) 1 else 3,
+                decorationBox = { innerTextField ->
+                    // Permite centrar el texto
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = when (textAlign) {
+                            TextAlign.Center -> Alignment.Center
+                            TextAlign.End -> Alignment.CenterEnd
+                            else -> Alignment.CenterStart
+                        }
+                    ) {
+                        innerTextField()
+                    }
+                }
+            )
+        }
     }
 }

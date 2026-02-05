@@ -51,8 +51,9 @@ fun DetailScreen(
             "CENTIMETRO", "CENTIMETROS", "CM", "CMS" -> "Cm"
             "MILIMETRO", "MILIMETROS", "MM", "MMS" -> "Mm"
             "PAQUETE", "PAQUETES", "PQ", "PQT", "PQTS" -> "Pq"
-            "CAJA", "CAJAS", "CJ", "CJA", "CJAS" -> "Cj"
-            "GALON", "GALONES", "GAL", "GALS" -> "Gal"
+            "CAJA", "CAJAS", "CJ", "CJA", "CJAS" -> "Bx"
+            "GALON", "US GALON", "GALONES", "GAL", "GALS" -> "Gal"
+            "CASE", "CS" -> "Cs"
             else -> if (unidad.isNotBlank()) unidad else ""
         }
 

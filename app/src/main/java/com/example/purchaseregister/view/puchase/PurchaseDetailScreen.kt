@@ -32,6 +32,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.Saver
 import com.example.purchaseregister.utils.*
 import com.example.purchaseregister.components.*
+import kotlinx.coroutines.launch
 
 val LongSaver = Saver<Long, Any>(
     save = { it },
@@ -73,24 +74,58 @@ fun PurchaseDetailScreen(
     var selectedStartMillis by rememberSaveable { mutableStateOf<Long?>(null) }
     var selectedEndMillis by rememberSaveable { mutableStateOf<Long?>(null) }
 
+    var showLoadingDialog by remember { mutableStateOf(false) }
+    var loadingStatus by remember { mutableStateOf("Obteniendo detalle de factura...") }
+    var loadingDebugInfo by remember { mutableStateOf<String?>(null) }
+    var facturaCargandoId by remember { mutableStateOf<Int?>(null) }
+    var esCompraCargando by remember { mutableStateOf(false) }
+
     // 🔴 IMPORTANTE: OBSERVAR ESTADOS DEL VIEWMODEL
     val isLoadingViewModel by viewModel.isLoading.collectAsStateWithLifecycle()
     val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
     val facturasCompras by viewModel.facturasCompras.collectAsStateWithLifecycle()
     val facturasVentas by viewModel.facturasVentas.collectAsStateWithLifecycle()
 
-    // 🔴 SINCRONIZAR LOADING CON VIEWMODEL
     LaunchedEffect(isLoadingViewModel) {
+        // 1. Sincronizar isLoading para mostrar el loading en la tabla
         isLoading = isLoadingViewModel
         println("🔄 [PurchaseDetailScreen] Loading sincronizado: $isLoading")
+
+        // 2. Manejar el diálogo de carga de detalles
+        // Cuando isLoadingViewModel cambia de true a false (terminó la carga)
+        if (!isLoadingViewModel && showLoadingDialog) {
+            // Esperar un momento para mostrar el mensaje de éxito
+            Handler(Looper.getMainLooper()).postDelayed({
+                showLoadingDialog = false
+                loadingDebugInfo = null
+
+                // Si tenemos una factura en proceso, navegar a su detalle
+                facturaCargandoId?.let { id ->
+                    onNavigateToDetalle(
+                        DetailRoute(
+                            id = id,
+                            esCompra = esCompraCargando
+                        )
+                    )
+                }
+                facturaCargandoId = null
+            }, 1500) // 1.5 segundos para mostrar que terminó
+        }
     }
 
-    // 🔴 MOSTRAR ERRORES
+    // OBSERVAR ERRORES DURANTE LA CARGA
     LaunchedEffect(errorMessage) {
         errorMessage?.let { mensaje ->
-            Toast.makeText(context, "Error: $mensaje", Toast.LENGTH_LONG).show()
-            viewModel.limpiarError()
-            println("❌ [PurchaseDetailScreen] Error mostrado: $mensaje")
+            if (showLoadingDialog) {
+                loadingStatus = "Error: $mensaje"
+                // Esperar 3 segundos y cerrar
+                Handler(Looper.getMainLooper()).postDelayed({
+                    showLoadingDialog = false
+                    loadingDebugInfo = null
+                    facturaCargandoId = null
+                    viewModel.limpiarError()
+                }, 3000)
+            }
         }
     }
 
@@ -314,6 +349,16 @@ fun PurchaseDetailScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Top
     ) {
+        FacturaLoadingDialog(
+            isLoading = showLoadingDialog,
+            statusMessage = loadingStatus,
+            onDismiss = {
+                showLoadingDialog = false
+                loadingDebugInfo = null
+                facturaCargandoId = null
+            }
+        )
+
         Spacer(modifier = Modifier.height(16.dp))
 
         // Título Provisional
@@ -577,15 +622,70 @@ fun PurchaseDetailScreen(
                                         modifier = Modifier.width(120.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
+                                        // Agrega el scope aquí
+                                        val coroutineScope = rememberCoroutineScope()
+
                                         TextButton(onClick = {
                                             val currentId = factura.id
                                             val currentIsCompra = (sectionActive == Section.COMPRAS)
-                                            onNavigateToDetalle(
-                                                DetailRoute(
-                                                    id = factura.id,
-                                                    esCompra = currentIsCompra
+
+                                            println("🎯 [Detalle presionado] ID: $currentId, Estado: ${factura.estado}")
+
+                                            if (factura.estado == "CON DETALLE") {
+                                                // Si ya tiene detalle, navegar directamente
+                                                onNavigateToDetalle(
+                                                    DetailRoute(
+                                                        id = factura.id,
+                                                        esCompra = currentIsCompra
+                                                    )
                                                 )
-                                            )
+                                            } else {
+                                                // Si no tiene detalle, mostrar diálogo de carga y obtenerlo
+                                                showLoadingDialog = true
+                                                facturaCargandoId = currentId
+                                                esCompraCargando = currentIsCompra
+                                                loadingStatus = "Obteniendo detalle de factura..."
+
+                                                // Obtener el RUC del emisor
+                                                val rucEmisor = viewModel.getRucEmisor(factura.id) ?: factura.ruc
+
+                                                // Iniciar la obtención de detalles CON CALLBACK
+                                                viewModel.cargarDetalleFacturaXmlConUsuario(
+                                                    facturaId = factura.id,
+                                                    esCompra = currentIsCompra,
+                                                    rucEmisor = rucEmisor,
+                                                    context = context
+                                                ) { success, message ->
+                                                    // Este callback se ejecuta cuando termina la operación
+                                                    if (success) {
+                                                        loadingStatus = "✅ " + (message ?: "Detalles obtenidos exitosamente")
+
+                                                        // Usar coroutineScope.launch en lugar de LaunchedEffect
+                                                        coroutineScope.launch {
+                                                            kotlinx.coroutines.delay(1500)
+                                                            showLoadingDialog = false
+                                                            loadingDebugInfo = null
+
+                                                            onNavigateToDetalle(
+                                                                DetailRoute(
+                                                                    id = currentId,
+                                                                    esCompra = currentIsCompra
+                                                                )
+                                                            )
+                                                        }
+                                                    } else {
+                                                        loadingStatus = "❌ " + (message ?: "Error desconocido")
+
+                                                        // Usar coroutineScope.launch en lugar de LaunchedEffect
+                                                        coroutineScope.launch {
+                                                            kotlinx.coroutines.delay(3000)
+                                                            showLoadingDialog = false
+                                                            loadingDebugInfo = null
+                                                            facturaCargandoId = null
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }) {
                                             Text(
                                                 "Detalle",

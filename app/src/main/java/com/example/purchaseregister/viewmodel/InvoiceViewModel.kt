@@ -397,7 +397,8 @@ class InvoiceViewModel : ViewModel() {
         facturaId: Int,
         esCompra: Boolean,
         rucEmisor: String,
-        context: android.content.Context
+        context: android.content.Context,
+        onLoadingComplete: (success: Boolean, message: String?) -> Unit = { _, _ -> }
     ) {
         val miRuc = SunatPrefs.getRuc(context)
         val usuario = SunatPrefs.getUser(context)
@@ -411,6 +412,7 @@ class InvoiceViewModel : ViewModel() {
 
         if (miRuc == null || usuario == null || claveSol == null) {
             _errorMessage.value = "Complete sus credenciales SUNAT primero"
+            onLoadingComplete(false, "Complete sus credenciales SUNAT primero")
             return
         }
 
@@ -423,32 +425,55 @@ class InvoiceViewModel : ViewModel() {
 
         if (factura == null) {
             _errorMessage.value = "Factura no encontrada"
+            onLoadingComplete(false, "Factura no encontrada")
             return
         }
 
-        val rucEmisorReal = _rucEmisores[facturaId] ?: miRuc
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                // Aquí puedes actualizar el estado a "PROCESANDO..." si quieres
+                actualizarEstadoFactura(facturaId, "PROCESANDO...", esCompra)
 
-        // Para COMPRAS:
-        // - rucEmisor debe ser el RUC del PROVEEDOR (factura.ruc)
-        // - ruc debe ser tu RUC (miRuc)
-        val rucEmisorParaAPI = if (esCompra) factura.ruc else miRuc
-        val rucReceptorParaAPI = if (esCompra) miRuc else factura.ruc
+                val rucEmisorParaAPI = if (esCompra) factura.ruc else miRuc
+                val rucReceptorParaAPI = if (esCompra) miRuc else factura.ruc
 
-        println("🔍 [ViewModel] Enviando a API:")
-        println("🔍 RUC Emisor: $rucEmisorParaAPI")
-        println("🔍 RUC Receptor: $rucReceptorParaAPI")
+                val request = DetalleFacturaRequest(
+                    rucEmisor = rucEmisorParaAPI,
+                    serie = factura.serie,
+                    numero = factura.numero,
+                    ruc = rucReceptorParaAPI,
+                    usuario_sol = usuario,
+                    clave_sol = claveSol
+                )
 
-        // Llamar a la función original
-        cargarDetalleFacturaXml(
-            rucEmisor = rucEmisorParaAPI,
-            serie = factura.serie,
-            numero = factura.numero,
-            ruc = rucReceptorParaAPI,
-            usuarioSol = usuario,
-            claveSol = claveSol,
-            facturaId = facturaId,
-            esCompra = esCompra
-        )
+                val detalle = sunatApiService.obtenerDetalleFacturaXml(request)
+
+                if (detalle.items != null && detalle.items.isNotEmpty()) {
+                    val productos = detalle.items.map { item ->
+                        ProductItem(
+                            descripcion = item.descripcion,
+                            cantidad = item.cantidad.toString(),
+                            costoUnitario = String.format("%.2f", item.valorUnitario),
+                            unidadMedida = item.unidad
+                        )
+                    }
+
+                    actualizarProductosFactura(facturaId, productos, esCompra)
+                    actualizarEstadoFactura(facturaId, "CON DETALLE", esCompra)
+
+                    onLoadingComplete(true, "Detalles obtenidos exitosamente")
+                } else {
+                    _errorMessage.value = "El XML no contiene detalles de productos"
+                    onLoadingComplete(false, "El XML no contiene detalles de productos")
+                }
+            } catch (e: Exception) {
+                _errorMessage.value = "Error al obtener detalles: ${e.message}"
+                onLoadingComplete(false, "Error: ${e.message}")
+            } finally {
+                _isLoading.value = false
+            }
+        }
     }
 
     fun agregarNuevaFacturaCompra(
