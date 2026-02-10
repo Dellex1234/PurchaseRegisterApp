@@ -1,7 +1,5 @@
 package com.example.purchaseregister.view.puchase
 
-import android.os.Handler
-import android.os.Looper
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -34,9 +32,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Icon
-import kotlinx.coroutines.delay
-import java.text.SimpleDateFormat
-import java.util.*
 
 enum class Section { COMPRAS, VENTAS }
 

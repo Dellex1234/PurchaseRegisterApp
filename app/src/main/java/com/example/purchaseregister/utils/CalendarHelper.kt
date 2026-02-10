@@ -1,4 +1,3 @@
-// CalendarHelper.kt
 package com.example.purchaseregister.utils
 
 import androidx.compose.foundation.border
@@ -16,10 +15,19 @@ import androidx.compose.runtime.Composable
 import java.text.SimpleDateFormat
 import java.util.*
 
-// Constante para el huso horario de Perú
 val PERU_TIME_ZONE = TimeZone.getTimeZone("America/Lima")
 
-// Función para obtener fecha actual en Perú
+fun normalizarFechaAMedianochePeru(millis: Long): Long {
+    val calendar = Calendar.getInstance(PERU_TIME_ZONE).apply {
+        timeInMillis = millis
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }
+    return calendar.timeInMillis
+}
+
 fun getHoyMillisPeru(): Long {
     return Calendar.getInstance(PERU_TIME_ZONE).apply {
         set(Calendar.HOUR_OF_DAY, 0)
@@ -29,17 +37,22 @@ fun getHoyMillisPeru(): Long {
     }.timeInMillis
 }
 
-// Función de extensión para formatear fechas con huso horario de Perú
 fun Long?.toFormattedDatePeru(): String {
     if (this == null) return ""
-    val calendar = Calendar.getInstance(PERU_TIME_ZONE)
-    calendar.timeInMillis = this
+    val calendar = Calendar.getInstance(PERU_TIME_ZONE).apply {
+        timeInMillis = this@toFormattedDatePeru
+    }
     val format = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
     format.timeZone = PERU_TIME_ZONE
     return format.format(calendar.time)
 }
 
-// Función para obtener el primer día del mes en Perú
+fun convertirDatePickerUTCaPeru(millisUTC: Long): Long {
+    val offset = PERU_TIME_ZONE.getOffset(millisUTC)
+    val fechaEnPeru = millisUTC - offset
+    return normalizarFechaAMedianochePeru(fechaEnPeru)
+}
+
 fun getPrimerDiaMesPeru(millis: Long): Long {
     val calendar = Calendar.getInstance(PERU_TIME_ZONE).apply {
         timeInMillis = millis
@@ -52,7 +65,6 @@ fun getPrimerDiaMesPeru(millis: Long): Long {
     return calendar.timeInMillis
 }
 
-// Función para obtener el último día del mes en Perú
 fun getUltimoDiaMesPeru(millis: Long): Long {
     val calendar = Calendar.getInstance(PERU_TIME_ZONE).apply {
         timeInMillis = millis
@@ -67,7 +79,6 @@ fun getUltimoDiaMesPeru(millis: Long): Long {
     return calendar.timeInMillis
 }
 
-// Función para obtener nombre del mes
 fun getNombreMesPeru(millis: Long): String {
     val calendar = Calendar.getInstance(PERU_TIME_ZONE).apply {
         timeInMillis = millis
@@ -89,22 +100,17 @@ fun DateRangeSelector(
         val startStr = selectedStartMillis.toFormattedDatePeru()
         val endStr = selectedEndMillis?.toFormattedDatePeru() ?: startStr
 
-        // Verificar si es un mes completo
         val primerDiaMes = getPrimerDiaMesPeru(selectedStartMillis)
         val ultimoDiaMes = getUltimoDiaMesPeru(selectedStartMillis)
 
         if (selectedStartMillis == primerDiaMes && selectedEndMillis == ultimoDiaMes) {
-            // Es un mes completo
             getNombreMesPeru(selectedStartMillis)
         } else if (startStr == endStr) {
-            // Es un solo día
             startStr
         } else {
-            // Es un rango
             "$startStr - $endStr"
         }
     } else {
-        // Mostrar mes actual por defecto
         val primerDia = getPrimerDiaMesPeru(hoyMillis)
         getNombreMesPeru(primerDia)
     }

@@ -1,4 +1,3 @@
-// CustomDatePickerDialog.kt
 package com.example.purchaseregister.components
 
 import androidx.compose.foundation.border
@@ -32,39 +31,37 @@ fun CustomDatePickerDialog(
     initialStartMillis: Long? = null,
     initialEndMillis: Long? = null
 ) {
-    val PERU_TIME_ZONE = TimeZone.getTimeZone("America/Lima")
     val hoyMillis = getHoyMillisPeru()
-
     var pickerMode by remember { mutableStateOf(DatePickerMode.PERIODO) }
 
-    // Para modo PERIODO
     var selectedMonthMillis by remember {
         mutableStateOf(initialStartMillis ?: getPrimerDiaMesPeru(hoyMillis))
     }
 
-    // Para modo RANGO
     var startDateMillis by remember {
-        mutableStateOf(initialStartMillis ?: hoyMillis)
-    }
-    var endDateMillis by remember {
-        mutableStateOf(initialEndMillis ?: hoyMillis)
+        mutableStateOf(
+            initialStartMillis?.let { normalizarFechaAMedianochePeru(it) } ?: normalizarFechaAMedianochePeru(hoyMillis)
+        )
     }
 
-    // Estado para DatePicker de inicio
+    var endDateMillis by remember {
+        mutableStateOf(
+            initialEndMillis?.let { normalizarFechaAMedianochePeru(it) } ?: normalizarFechaAMedianochePeru(hoyMillis)
+        )
+    }
+
     var showStartDatePicker by remember { mutableStateOf(false) }
+    var showEndDatePicker by remember { mutableStateOf(false) }
+
     val startDatePickerState = rememberDatePickerState(
         initialSelectedDateMillis = startDateMillis
     )
 
-    // Estado para DatePicker de fin
-    var showEndDatePicker by remember { mutableStateOf(false) }
     val endDatePickerState = rememberDatePickerState(
         initialSelectedDateMillis = endDateMillis
     )
 
-    Dialog(
-        onDismissRequest = onDismiss
-    ) {
+    Dialog(onDismissRequest = onDismiss) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -79,7 +76,6 @@ fun CustomDatePickerDialog(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Título
                 Text(
                     text = "Seleccionar Fechas",
                     fontSize = 18.sp,
@@ -89,12 +85,10 @@ fun CustomDatePickerDialog(
                     textAlign = TextAlign.Center
                 )
 
-                // Selector de modo
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Botón PERIODO
                     Button(
                         onClick = { pickerMode = DatePickerMode.PERIODO },
                         modifier = Modifier.weight(1f),
@@ -114,7 +108,6 @@ fun CustomDatePickerDialog(
                         )
                     }
 
-                    // Botón RANGO
                     Button(
                         onClick = { pickerMode = DatePickerMode.RANGO },
                         modifier = Modifier.weight(1f),
@@ -135,14 +128,11 @@ fun CustomDatePickerDialog(
                     }
                 }
 
-                // Contenido según el modo seleccionado
                 when (pickerMode) {
                     DatePickerMode.PERIODO -> {
                         PeriodoSelector(
                             selectedMonthMillis = selectedMonthMillis,
-                            onMonthChange = { newMonthMillis ->
-                                selectedMonthMillis = newMonthMillis
-                            }
+                            onMonthChange = { selectedMonthMillis = it }
                         )
                     }
                     DatePickerMode.RANGO -> {
@@ -155,12 +145,10 @@ fun CustomDatePickerDialog(
                     }
                 }
 
-                // Botones de acción
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    // Botón Cancelar
                     Button(
                         onClick = onDismiss,
                         modifier = Modifier.weight(1f),
@@ -176,7 +164,6 @@ fun CustomDatePickerDialog(
                         )
                     }
 
-                    // Botón Aceptar
                     Button(
                         onClick = {
                             when (pickerMode) {
@@ -208,14 +195,13 @@ fun CustomDatePickerDialog(
         }
     }
 
-    // DatePicker para fecha de inicio
     if (showStartDatePicker) {
         DatePickerDialog(
             onDismissRequest = { showStartDatePicker = false },
             confirmButton = {
                 TextButton(onClick = {
                     startDatePickerState.selectedDateMillis?.let {
-                        startDateMillis = it
+                        startDateMillis = convertirDatePickerUTCaPeru(it)
                     }
                     showStartDatePicker = false
                 }) {
@@ -232,14 +218,13 @@ fun CustomDatePickerDialog(
         }
     }
 
-    // DatePicker para fecha de fin
     if (showEndDatePicker) {
         DatePickerDialog(
             onDismissRequest = { showEndDatePicker = false },
             confirmButton = {
                 TextButton(onClick = {
                     endDatePickerState.selectedDateMillis?.let {
-                        endDateMillis = it
+                        endDateMillis = convertirDatePickerUTCaPeru(it)
                     }
                     showEndDatePicker = false
                 }) {
@@ -265,8 +250,6 @@ fun PeriodoSelector(
     val calendar = Calendar.getInstance(PERU_TIME_ZONE).apply {
         timeInMillis = selectedMonthMillis
     }
-    val currentMonth = calendar.get(Calendar.MONTH)
-    val currentYear = calendar.get(Calendar.YEAR)
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -287,7 +270,6 @@ fun PeriodoSelector(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Botón mes anterior
             Button(
                 onClick = {
                     calendar.add(Calendar.MONTH, -1)
@@ -307,7 +289,6 @@ fun PeriodoSelector(
                 )
             }
 
-            // Mes actual
             Text(
                 text = getNombreMesPeru(selectedMonthMillis),
                 modifier = Modifier.weight(2f),
@@ -317,7 +298,6 @@ fun PeriodoSelector(
                 color = Color(0xFF1FB8B9)
             )
 
-            // Botón mes siguiente
             Button(
                 onClick = {
                     calendar.timeInMillis = selectedMonthMillis
@@ -339,7 +319,6 @@ fun PeriodoSelector(
             }
         }
 
-        // Información del período
         val primerDia = getPrimerDiaMesPeru(selectedMonthMillis)
         val ultimoDia = getUltimoDiaMesPeru(selectedMonthMillis)
 
@@ -382,7 +361,6 @@ fun RangoSelector(
             textAlign = TextAlign.Center
         )
 
-        // Fecha de inicio
         Column(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -419,7 +397,6 @@ fun RangoSelector(
             }
         }
 
-        // Fecha de fin
         Column(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -456,7 +433,6 @@ fun RangoSelector(
             }
         }
 
-        // Información del rango
         Text(
             text = "Rango seleccionado:",
             fontSize = 12.sp,
