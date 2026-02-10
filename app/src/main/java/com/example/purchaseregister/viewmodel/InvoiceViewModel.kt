@@ -36,6 +36,7 @@ class InvoiceViewModel : ViewModel() {
     val registroCompletado: StateFlow<Boolean> = _registroCompletado.asStateFlow()
 
     private val _rucEmisores = mutableMapOf<Int, String>()
+    private val _facturasCache = mutableMapOf<String, List<Invoice>>()
 
     fun registrarFacturasEnBaseDeDatos(
         facturas: List<Invoice>,
@@ -109,21 +110,89 @@ class InvoiceViewModel : ViewModel() {
         }
     }
 
-    fun resetRegistroCompletado() {
-        _registroCompletado.value = false
+    private fun getCacheKey(esCompra: Boolean, periodoInicio: String): String {
+        return "${if (esCompra) "COMPRAS" else "VENTAS"}-${periodoInicio}"
     }
 
     fun cargarFacturasDesdeAPI(periodoInicio: String, periodoFin: String, esCompra: Boolean = true) {
         viewModelScope.launch {
-            _isLoading.value = true
+            val cacheKey = getCacheKey(esCompra, periodoInicio)
+            val facturasEnCache = _facturasCache[cacheKey]
+
             _errorMessage.value = null
+
+            // ✅ 1. SI HAY CACHE: Solo actualizar estados SIN loading
+            if (facturasEnCache != null) {
+                try {
+                    val facturasActualizadas = mutableListOf<Invoice>()
+
+                    for (factura in facturasEnCache) {
+                        try {
+                            val numeroComprobante = "${factura.serie}-${factura.numero}"
+                            val facturaUI = apiService.obtenerFacturaParaUI(numeroComprobante)
+
+                            val estadoActual = facturaUI.factura.estado
+
+                            val productosActuales = if (facturaUI.factura.detalles != null) {
+                                facturaUI.factura.detalles.map { detalle ->
+                                    ProductItem(
+                                        descripcion = detalle.descripcion,
+                                        cantidad = detalle.cantidad,
+                                        costoUnitario = detalle.costoUnitario,
+                                        unidadMedida = detalle.unidadMedida
+                                    )
+                                }
+                            } else {
+                                factura.productos
+                            }
+
+                            val facturaActualizada = factura.copy(
+                                estado = estadoActual,
+                                productos = productosActuales
+                            )
+
+                            facturasActualizadas.add(facturaActualizada)
+
+                        } catch (e: Exception) {
+                            // Si falla, mantener la factura original del cache
+                            facturasActualizadas.add(factura)
+                        }
+                    }
+
+                    // ✅ Actualizar el cache con los nuevos estados
+                    _facturasCache[cacheKey] = facturasActualizadas
+
+                    // ✅ Mostrar en UI
+                    if (esCompra) {
+                        _facturasCompras.value = facturasActualizadas
+                    } else {
+                        _facturasVentas.value = facturasActualizadas
+                    }
+
+                } catch (e: Exception) {
+                    _errorMessage.value = "Error actualizando estados: ${e.message}"
+                    // Si falla, mostrar cache original
+                    if (esCompra) {
+                        _facturasCompras.value = facturasEnCache
+                    } else {
+                        _facturasVentas.value = facturasEnCache
+                    }
+                }
+
+                // ✅ IMPORTANTE: NO activamos isLoading ni lo desactivamos
+                return@launch
+            }
+
+            // ✅ 2. NO HAY CACHE: Consultar SUNAT CON loading
+            _isLoading.value = true
 
             try {
                 val response = apiService.obtenerFacturas(periodoInicio, periodoFin)
 
                 if (response.success) {
-                    // PASA el parámetro esCompra
                     val facturas = parsearContenidoSunat(response.resultados, esCompra)
+
+                    _facturasCache[cacheKey] = facturas
 
                     if (esCompra) {
                         _facturasCompras.value = facturas
@@ -298,52 +367,6 @@ class InvoiceViewModel : ViewModel() {
                 SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).parse(factura.fechaEmision)?.time ?: 0L
             } catch (e: Exception) {
                 0L
-            }
-        }
-    }
-
-    fun cargarDetalleFacturaXml(
-        rucEmisor: String,
-        serie: String,
-        numero: String,
-        ruc: String,
-        usuarioSol: String,
-        claveSol: String,
-        facturaId: Int,
-        esCompra: Boolean
-    ) {
-        viewModelScope.launch {
-            _isLoading.value = true
-            try {
-                val request = DetalleFacturaRequest(
-                    rucEmisor = rucEmisor,
-                    serie = serie,
-                    numero = numero,
-                    ruc = ruc,
-                    usuario_sol = usuarioSol,
-                    clave_sol = claveSol
-                )
-
-                val detalle = apiService.obtenerDetalleFacturaXml(request)
-
-                if (detalle.items != null && detalle.items.isNotEmpty()) {
-                    val productos = detalle.items.map { item ->
-                        ProductItem(
-                            descripcion = item.descripcion,
-                            cantidad = item.cantidad.toString(),
-                            costoUnitario = String.format("%.2f", item.valorUnitario),
-                            unidadMedida = item.unidad
-                        )
-                    }
-
-                    actualizarProductosFactura(facturaId, productos, esCompra)
-                } else {
-                    _errorMessage.value = "El XML no contiene detalles de productos"
-                }
-            } catch (e: Exception) {
-                _errorMessage.value = "Error al obtener detalles: ${e.message}"
-            } finally {
-                _isLoading.value = false
             }
         }
     }
@@ -588,6 +611,7 @@ class InvoiceViewModel : ViewModel() {
                 _facturasCompras.update { lista ->
                     lista.map { factura ->
                         if (factura.id == facturaId) {
+                            actualizarFacturaEnCaches(factura, nuevoEstado)
                             factura.copy(estado = nuevoEstado)
                         } else {
                             factura
@@ -598,6 +622,7 @@ class InvoiceViewModel : ViewModel() {
                 _facturasVentas.update { lista ->
                     lista.map { factura ->
                         if (factura.id == facturaId) {
+                            actualizarFacturaEnCaches(factura, nuevoEstado)
                             factura.copy(estado = nuevoEstado)
                         } else {
                             factura
@@ -608,51 +633,19 @@ class InvoiceViewModel : ViewModel() {
         }
     }
 
-    fun actualizarSeleccionCompras(id: Int, isSelected: Boolean) {
-        viewModelScope.launch {
-            _facturasCompras.update { lista ->
-                lista.map { factura ->
-                    if (factura.id == id) {
-                        factura.copy(isSelected = isSelected)
-                    } else {
-                        factura
-                    }
+    private fun actualizarFacturaEnCaches(facturaOriginal: Invoice, nuevoEstado: String) {
+        _facturasCache.forEach { (key, facturasEnCache) ->
+            val facturasActualizadas = facturasEnCache.map { facturaCache ->
+                // Comparar por ruc, serie y número (no por id que puede cambiar)
+                if (facturaCache.ruc == facturaOriginal.ruc &&
+                    facturaCache.serie == facturaOriginal.serie &&
+                    facturaCache.numero == facturaOriginal.numero) {
+                    facturaCache.copy(estado = nuevoEstado)
+                } else {
+                    facturaCache
                 }
             }
-        }
-    }
-
-    fun actualizarSeleccionVentas(id: Int, isSelected: Boolean) {
-        viewModelScope.launch {
-            _facturasVentas.update { lista ->
-                lista.map { factura ->
-                    if (factura.id == id) {
-                        factura.copy(isSelected = isSelected)
-                    } else {
-                        factura
-                    }
-                }
-            }
-        }
-    }
-
-    fun seleccionarTodasCompras(seleccionar: Boolean) {
-        viewModelScope.launch {
-            _facturasCompras.update { lista ->
-                lista.map { factura ->
-                    factura.copy(isSelected = seleccionar)
-                }
-            }
-        }
-    }
-
-    fun seleccionarTodasVentas(seleccionar: Boolean) {
-        viewModelScope.launch {
-            _facturasVentas.update { lista ->
-                lista.map { factura ->
-                    factura.copy(isSelected = seleccionar)
-                }
-            }
+            _facturasCache[key] = facturasActualizadas
         }
     }
 }
