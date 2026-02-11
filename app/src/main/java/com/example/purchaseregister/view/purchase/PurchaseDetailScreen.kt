@@ -1,4 +1,4 @@
-package com.example.purchaseregister.view.puchase
+package com.example.purchaseregister.view.purchase
 
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -68,6 +68,10 @@ fun PurchaseDetailScreen(
     var facturaParaDetalle by remember { mutableStateOf<Invoice?>(null) }
     var esCompraParaDetalle by remember { mutableStateOf(false) }
     var facturasConTimerActivo by remember { mutableStateOf<Set<Int>>(emptySet()) }
+    var isDetallandoTodos by remember { mutableStateOf(false) }
+    var totalFacturasProcesar by remember { mutableStateOf(0) }
+    var facturasProcesadasExitosas by remember { mutableStateOf(0) }
+    var facturasProcesadasFallidas by remember { mutableStateOf(0) }
 
     val hoyMillis = remember { getHoyMillisPeru() }
 
@@ -322,17 +326,111 @@ fun PurchaseDetailScreen(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.End
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(
-                text = "Selecciona periodo o rango de fecha:",
-                fontSize = 10.sp,
-                color = Color.Black,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(end = 8.dp)
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val hayScrappingEnCurso = remember {
+                    derivedStateOf {
+                        listaFiltrada.any { it.estado == "EN PROCESO" }
+                    }
+                }
+
+                IconButton(
+                    onClick = {
+                        if (listaFiltrada.isEmpty()) {
+                            Toast.makeText(
+                                context,
+                                "No hay facturas en lista para detallar",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        } else {
+                            // Filtrar solo facturas procesables
+                            val facturasProcesables = listaFiltrada.filter { factura ->
+                                factura.estado != "CON DETALLE" &&
+                                        factura.estado != "REGISTRADO" &&
+                                        factura.estado != "EN PROCESO"
+                            }
+
+                            if (facturasProcesables.isEmpty()) {
+                                Toast.makeText(
+                                    context,
+                                    "Todas las facturas ya tienen detalle o están en proceso",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                                return@IconButton
+                            }
+
+                            // SIMULAR CLICK EN CADA OJO DE LA LISTA
+                            facturasProcesables.forEach { factura ->
+                                val currentIsCompra = (sectionActive == Section.COMPRAS)
+                                val ruc = SunatPrefs.getRuc(context)
+                                val usuario = SunatPrefs.getUser(context)
+                                val claveSol = SunatPrefs.getClaveSol(context)
+
+                                if (ruc == null || usuario == null) {
+                                    showSunatLogin = true
+                                    return@forEach
+                                }
+
+                                if (claveSol == null) {
+                                    facturaParaDetalle = factura
+                                    esCompraParaDetalle = currentIsCompra
+                                    showClaveSolDialog = true
+                                } else {
+                                    val rucEmisor = viewModel.getRucEmisor(factura.id) ?: factura.ruc
+
+                                    viewModel.cargarDetalleFacturaXmlConUsuario(
+                                        facturaId = factura.id,
+                                        esCompra = currentIsCompra,
+                                        rucEmisor = rucEmisor,
+                                        context = context
+                                    ) { success, message ->
+                                        // NO mostrar Toast para no spamear
+                                    }
+                                }
+                            }
+
+                            Toast.makeText(
+                                context,
+                                "🔄 Procesando ${facturasProcesables.size} facturas...",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    },
+                    modifier = Modifier.size(40.dp),
+                    enabled = !hayScrappingEnCurso.value
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Visibility,
+                        contentDescription = "Detallar todas las facturas",
+                        tint = if (hayScrappingEnCurso.value) Color.Gray else Color(0xFF1FB8B9),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                Column(
+                    horizontalAlignment = Alignment.Start,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "Detallar",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF1FB8B9),
+                        lineHeight = 16.sp
+                    )
+                    Text(
+                        text = "todas",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF1FB8B9),
+                        lineHeight = 16.sp
+                    )
+                }
+            }
             DateRangeSelector(
                 selectedStartMillis = selectedStartMillis,
                 selectedEndMillis = selectedEndMillis,
@@ -506,11 +604,7 @@ fun PurchaseDetailScreen(
                                                         imageVector = Icons.Filled.Visibility,
                                                         contentDescription = "Ver detalle",
                                                         modifier = Modifier.size(20.dp),
-                                                        tint = when {
-                                                            factura.estado == "EN PROCESO" -> Color.Gray
-                                                            factura.estado == "CON DETALLE" || factura.estado == "REGISTRADO" -> Color.Green
-                                                            else -> Color.Unspecified
-                                                        }
+                                                        tint = if (factura.estado == "EN PROCESO") Color.Gray else Color.Unspecified
                                                     )
                                                 }
                                                 InvoiceStatusCircle(factura.estado, tamano = 14.dp)

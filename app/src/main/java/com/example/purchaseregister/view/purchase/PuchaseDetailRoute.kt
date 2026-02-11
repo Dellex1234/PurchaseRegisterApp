@@ -2,7 +2,7 @@ package com.example.purchaseregister.navigation
 
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
-import com.example.purchaseregister.view.puchase.PurchaseDetailScreen
+import com.example.purchaseregister.view.purchase.PurchaseDetailScreen
 import kotlinx.serialization.Serializable
 import com.example.purchaseregister.viewmodel.InvoiceViewModel
 

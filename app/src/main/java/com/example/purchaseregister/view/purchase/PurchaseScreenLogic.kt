@@ -1,4 +1,4 @@
-package com.example.purchaseregister.view.puchase
+package com.example.purchaseregister.view.purchase
 
 import android.content.Context
 import android.os.Handler
