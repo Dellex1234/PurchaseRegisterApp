@@ -1,15 +1,12 @@
 package com.example.purchaseregister.viewmodel.shared
 
 import com.example.purchaseregister.model.Invoice
-import com.example.purchaseregister.model.ProductItem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
-// SINGLETON - Mantiene el estado global
 object FacturaRepository {
-    // Estado centralizado - ¡TUS MISMAS VARIABLES!
     private val _facturasCompras = MutableStateFlow<List<Invoice>>(emptyList())
     val facturasCompras: StateFlow<List<Invoice>> = _facturasCompras.asStateFlow()
 
@@ -19,7 +16,7 @@ object FacturaRepository {
     private val _rucEmisores = mutableMapOf<Int, String>()
     private val _facturasCache = mutableMapOf<String, List<Invoice>>()
 
-    // ✅ EXPONER MÉTODOS PARA ACCEDER/MODIFICAR
+    // ✅ MÉTODOS PARA ACCEDER/MODIFICAR
     fun getFacturasCompras(): List<Invoice> = _facturasCompras.value
     fun getFacturasVentas(): List<Invoice> = _facturasVentas.value
 
@@ -70,5 +67,12 @@ object FacturaRepository {
             }
             _facturasCache[key] = facturasActualizadas
         }
+    }
+
+    fun clearAll() {
+        _facturasCompras.value = emptyList()
+        _facturasVentas.value = emptyList()
+        _facturasCache.clear()
+        _rucEmisores.clear()
     }
 }

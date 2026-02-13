@@ -63,3 +63,9 @@ data class RegistrarFacturaDesdeSunatRequest(
     val importeTotal: String,
     val usuarioId: Int = 1
 )
+
+data class ValidarCredencialesRequest(
+    val ruc: String,
+    val usuario: String,
+    val claveSol: String
+)

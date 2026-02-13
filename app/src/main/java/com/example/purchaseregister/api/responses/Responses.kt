@@ -170,3 +170,9 @@ data class JobResult(
     val items: List<ItemResponse>?,
     val archivoXml: String?
 )
+
+data class ValidarCredencialesResponse(
+    val valido: Boolean,
+    val mensaje: String? = null,
+    val token: String? = null
+)

@@ -18,7 +18,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.purchaseregister.model.Invoice
 import com.example.purchaseregister.navigation.DetailRoute
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -30,6 +29,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import com.example.purchaseregister.viewmodel.InvoiceViewModel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -37,6 +37,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.outlined.PowerSettingsNew
 
 enum class Section { COMPRAS, VENTAS }
 
@@ -59,7 +61,7 @@ fun PurchaseDetailScreen(
     var isLoading by remember { mutableStateOf(false) }
     var showCustomDatePicker by remember { mutableStateOf(false) }
 
-    // ✅ CORREGIDO: Inicializar fechas con el mes actual
+    // Fechas
     val hoyMillis = remember { getHoyMillisPeru() }
     val primerDiaMes = remember { getPrimerDiaMesPeru(hoyMillis) }
     val ultimoDiaMes = remember { getUltimoDiaMesPeru(hoyMillis) }
@@ -81,6 +83,9 @@ fun PurchaseDetailScreen(
     var claveSolInput by remember { mutableStateOf("") }
     var showCredencialesDialog by remember { mutableStateOf(false) }
     var consultarDespuesDeLogin by remember { mutableStateOf(false) }
+
+    // Variables para el diálogo de logout
+    var showLogoutDialog by remember { mutableStateOf(false) }
 
     // ViewModel states
     val isLoadingViewModel by purchaseViewModel.isLoading.collectAsStateWithLifecycle()
@@ -118,37 +123,24 @@ fun PurchaseDetailScreen(
         onFacturaCargandoIdChange = { facturaCargandoId = it }
     )
 
-    // Efectos adicionales
-    LaunchedEffect(facturasCompras, facturasVentas) {
-        val totalFacturas = if (sectionActive == Section.COMPRAS) facturasCompras.size else facturasVentas.size
-        if (totalFacturas > 0 && !isListVisible) {
-            isListVisible = true
-        }
-    }
-
-    LaunchedEffect(selectedStartMillis) {
-        if (selectedStartMillis != null && !isListVisible) {
-            isListVisible = true
-        }
-    }
-
+    // Efecto inicial
     LaunchedEffect(Unit) {
-        // Pequeña pausa para que todo se inicialice
         delay(500)
-
         val ruc = SunatPrefs.getRuc(context)
         val usuario = SunatPrefs.getUser(context)
         val claveSol = SunatPrefs.getClaveSol(context)
 
         if (ruc != null && usuario != null && claveSol != null) {
-            // Ya tiene credenciales -> Consultar automáticamente
             val periodoInicio = convertirFechaAPeriodo(selectedStartMillis ?: hoyMillis)
             val periodoFin = convertirFechaAPeriodo(selectedEndMillis ?: hoyMillis)
 
             purchaseViewModel.cargarFacturasDesdeAPI(
                 periodoInicio = periodoInicio,
                 periodoFin = periodoFin,
-                esCompra = (sectionActive == Section.COMPRAS)
+                esCompra = (sectionActive == Section.COMPRAS),
+                ruc = ruc,
+                usuario = usuario,
+                claveSol = claveSol
             )
 
             isListVisible = true
@@ -159,7 +151,6 @@ fun PurchaseDetailScreen(
                 Toast.LENGTH_SHORT
             ).show()
         } else {
-            // No tiene credenciales -> Mostrar diálogo
             consultarDespuesDeLogin = true
             showCredencialesDialog = true
         }
@@ -183,14 +174,21 @@ fun PurchaseDetailScreen(
         }
     }
 
+    // Diálogo de credenciales
     if (showCredencialesDialog) {
+        var isValidando by remember { mutableStateOf(false) }
+        var errorMensaje by remember { mutableStateOf<String?>(null) }
+
         AlertDialog(
             onDismissRequest = {
-                showCredencialesDialog = false
-                rucInput = ""
-                usuarioInput = ""
-                claveSolInput = ""
-                consultarDespuesDeLogin = false
+                if (!isValidando) {
+                    showCredencialesDialog = false
+                    rucInput = ""
+                    usuarioInput = ""
+                    claveSolInput = ""
+                    consultarDespuesDeLogin = false
+                    errorMensaje = null
+                }
             },
             title = { Text("Credenciales SUNAT") },
             text = {
@@ -199,81 +197,216 @@ fun PurchaseDetailScreen(
                 ) {
                     Text("Complete sus credenciales SUNAT para continuar:")
 
+                    // RUC
                     OutlinedTextField(
                         value = rucInput,
-                        onValueChange = { rucInput = it },
+                        onValueChange = {
+                            val nuevoValor = it.filter { char -> char.isDigit() }
+                            if (nuevoValor.length <= 11) {
+                                rucInput = nuevoValor
+                                errorMensaje = null
+                            }
+                        },
                         label = { Text("RUC") },
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        isError = errorMensaje != null,
+                        supportingText = if (errorMensaje != null) {
+                            { Text(errorMensaje!!, color = Color.Red) }
+                        } else {
+                            { Text("${rucInput.length}/11 dígitos") }
+                        }
                     )
 
+                    // Usuario (siempre mayúsculas)
                     OutlinedTextField(
                         value = usuarioInput,
-                        onValueChange = { usuarioInput = it },
+                        onValueChange = {
+                            usuarioInput = it.uppercase()
+                            errorMensaje = null
+                        },
                         label = { Text("Usuario SOL") },
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        isError = errorMensaje != null
                     )
 
+                    // Clave SOL
                     OutlinedTextField(
                         value = claveSolInput,
-                        onValueChange = { claveSolInput = it },
+                        onValueChange = {
+                            if (it.length <= 12) {
+                                claveSolInput = it
+                                errorMensaje = null
+                            }
+                        },
                         label = { Text("Clave SOL") },
                         visualTransformation = PasswordVisualTransformation(),
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        isError = errorMensaje != null,
+                        supportingText = {
+                            Text("${claveSolInput.length}/12 caracteres")
+                        }
                     )
+
+                    if (isValidando) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = Color(0xFF1FB8B9)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = "Validando credenciales con SUNAT...",
+                                fontSize = 12.sp,
+                                color = Color.Gray
+                            )
+                        }
+                    }
                 }
             },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        if (rucInput.isNotEmpty() && usuarioInput.isNotEmpty() && claveSolInput.isNotEmpty()) {
-                            // Guardar credenciales
-                            SunatPrefs.saveRuc(context, rucInput)
-                            SunatPrefs.saveUser(context, usuarioInput)
-                            SunatPrefs.saveClaveSol(context, claveSolInput)
-
-                            // Si la consulta estaba esperando, ejecutarla
-                            if (consultarDespuesDeLogin) {
-                                val periodoInicio = convertirFechaAPeriodo(selectedStartMillis ?: hoyMillis)
-                                val periodoFin = convertirFechaAPeriodo(selectedEndMillis ?: hoyMillis)
-
-                                purchaseViewModel.cargarFacturasDesdeAPI(
-                                    periodoInicio = periodoInicio,
-                                    periodoFin = periodoFin,
-                                    esCompra = (sectionActive == Section.COMPRAS)
-                                )
-
-                                isListVisible = true
-                                consultarDespuesDeLogin = false
+                        coroutineScope.launch {
+                            if (rucInput.length != 11) {
+                                errorMensaje = "El RUC debe tener 11 dígitos"
+                                return@launch
                             }
 
-                            showCredencialesDialog = false
-                            rucInput = ""
-                            usuarioInput = ""
-                            claveSolInput = ""
+                            if (claveSolInput.isEmpty()) {
+                                errorMensaje = "La clave SOL no puede estar vacía"
+                                return@launch
+                            }
 
-                            Toast.makeText(
-                                context,
-                                "✅ Credenciales guardadas correctamente",
-                                Toast.LENGTH_SHORT
-                            ).show()
+                            isValidando = true
+                            errorMensaje = null
+
+                            val esValido = purchaseViewModel.validarCredencialesSUNAT(
+                                ruc = rucInput,
+                                usuario = usuarioInput,
+                                claveSol = claveSolInput,
+                            )
+
+                            isValidando = false
+
+                            if (esValido) {
+                                SunatPrefs.saveRuc(context, rucInput)
+                                SunatPrefs.saveUser(context, usuarioInput)
+                                SunatPrefs.saveClaveSol(context, claveSolInput)
+
+                                if (consultarDespuesDeLogin) {
+                                    val periodoInicio = convertirFechaAPeriodo(selectedStartMillis ?: hoyMillis)
+                                    val periodoFin = convertirFechaAPeriodo(selectedEndMillis ?: hoyMillis)
+
+                                    purchaseViewModel.cargarFacturasDesdeAPI(
+                                        periodoInicio = periodoInicio,
+                                        periodoFin = periodoFin,
+                                        esCompra = (sectionActive == Section.COMPRAS),
+                                        ruc = rucInput,
+                                        usuario = usuarioInput,
+                                        claveSol = claveSolInput
+                                    )
+
+                                    isListVisible = true
+                                    consultarDespuesDeLogin = false
+                                }
+
+                                showCredencialesDialog = false
+                                rucInput = ""
+                                usuarioInput = ""
+                                claveSolInput = ""
+
+                                Toast.makeText(
+                                    context,
+                                    "✅ Credenciales válidas. Guardadas correctamente.",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            } else {
+                                errorMensaje = "Credenciales incorrectas. Verifique RUC, Usuario y Clave SOL."
+                            }
                         }
                     },
-                    enabled = rucInput.isNotEmpty() && usuarioInput.isNotEmpty() && claveSolInput.isNotEmpty()
+                    enabled = !isValidando &&
+                            rucInput.length == 11 &&
+                            usuarioInput.isNotEmpty() &&
+                            claveSolInput.isNotEmpty() &&
+                            claveSolInput.length <= 12
                 ) {
-                    Text("Guardar y Continuar")
+                    if (isValidando) {
+                        Text("Validando...")
+                    } else {
+                        Text("Validar y Guardar")
+                    }
                 }
             },
             dismissButton = {
                 TextButton(
                     onClick = {
-                        showCredencialesDialog = false
-                        rucInput = ""
-                        usuarioInput = ""
-                        claveSolInput = ""
-                        consultarDespuesDeLogin = false
+                        if (!isValidando) {
+                            showCredencialesDialog = false
+                            rucInput = ""
+                            usuarioInput = ""
+                            claveSolInput = ""
+                            consultarDespuesDeLogin = false
+                            errorMensaje = null
+                        }
+                    },
+                    enabled = !isValidando
+                ) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    // Diálogo de logout
+    if (showLogoutDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showLogoutDialog = false
+            },
+            title = { Text("Cerrar Sesión") },
+            text = { Text("¿Estás seguro de que deseas cerrar sesión?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        // Limpiar credenciales guardadas
+                        SunatPrefs.clearCredentials(context)
+
+                        // Limpiar lista de facturas
+                        purchaseViewModel.limpiarFacturas()
+
+                        // Resetear estados
+                        isListVisible = false
+                        showLogoutDialog = false
+
+                        // Volver a mostrar el diálogo de credenciales
+                        consultarDespuesDeLogin = true
+                        showCredencialesDialog = true
+
+                        Toast.makeText(
+                            context,
+                            "Sesión cerrada. Ingrese nuevas credenciales.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = Color.Red
+                    )
+                ) {
+                    Text("Aceptar")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showLogoutDialog = false
                     }
                 ) {
                     Text("Cancelar")
@@ -320,12 +453,35 @@ fun PurchaseDetailScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Text(
-            text = "Registro Contable",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 15.dp)
-        )
+        // TÍTULO CON ICONO DE LOGOUT A LA DERECHA
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+        ) {
+            Text(
+                text = "Registro Contable",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.align(Alignment.Center)
+            )
+
+            IconButton(
+                onClick = { showLogoutDialog = true },
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .size(40.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.PowerSettingsNew,
+                    contentDescription = "Cerrar sesión",
+                    tint = Color(0xFF1FB8B9),
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(15.dp))
 
         Row(
             modifier = Modifier
@@ -406,7 +562,6 @@ fun PurchaseDetailScreen(
                             return@IconButton
                         }
 
-                        // Verificar credenciales ANTES de empezar
                         val ruc = SunatPrefs.getRuc(context)
                         val usuario = SunatPrefs.getUser(context)
                         val claveSol = SunatPrefs.getClaveSol(context)
@@ -420,7 +575,6 @@ fun PurchaseDetailScreen(
                             return@IconButton
                         }
 
-                        // --- INICIAR PROCESAMIENTO MASIVO ---
                         coroutineScope.launch {
                             var exitosas = 0
                             var fallidas = 0
@@ -564,7 +718,7 @@ fun PurchaseDetailScreen(
                     ) {
                         if (!isListVisible) {
                             Text(
-                                "Presione CONSULTAR para ver registros",
+                                "Presione CONSULTAR para iniciar sesion",
                                 modifier = Modifier
                                     .width(totalWidth)
                                     .padding(20.dp),
@@ -731,23 +885,23 @@ fun PurchaseDetailScreen(
                     val usuario = SunatPrefs.getUser(context)
                     val claveSol = SunatPrefs.getClaveSol(context)
 
-                    // Verificar si faltan credenciales
                     if (ruc == null || usuario == null || claveSol == null) {
                         consultarDespuesDeLogin = true
                         showCredencialesDialog = true
                         return@Button
                     }
 
-                    // Si ya tiene credenciales, consultar directamente
                     val periodoInicio = convertirFechaAPeriodo(selectedStartMillis ?: hoyMillis)
                     val periodoFin = convertirFechaAPeriodo(selectedEndMillis ?: hoyMillis)
 
                     purchaseViewModel.cargarFacturasDesdeAPI(
                         periodoInicio = periodoInicio,
                         periodoFin = periodoFin,
-                        esCompra = (sectionActive == Section.COMPRAS)
+                        esCompra = (sectionActive == Section.COMPRAS),
+                        ruc = ruc,
+                        usuario = usuario,
+                        claveSol = claveSol
                     )
-
                     isListVisible = true
                 },
                 modifier = Modifier

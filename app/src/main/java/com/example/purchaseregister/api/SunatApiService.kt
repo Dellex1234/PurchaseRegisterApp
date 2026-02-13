@@ -9,7 +9,10 @@ interface SunatApiService {
     @GET("sunat/facturas")
     suspend fun obtenerFacturas(
         @Query("periodoInicio") periodoInicio: String,
-        @Query("periodoFin") periodoFin: String
+        @Query("periodoFin") periodoFin: String,
+        @Query("ruc") ruc: String,
+        @Query("usuario") usuario: String,
+        @Query("claveSol") claveSol: String
     ): SunatResponse
 
     @PUT("factura/scraping-completado/{numeroComprobante}")
@@ -69,4 +72,9 @@ interface SunatApiService {
         @Path("numeroComprobante") numeroComprobante: String,
         @Path("tipo") tipo: String
     ): ResponseBody
+
+    @POST("sunat/validar-credenciales")
+    suspend fun validarCredenciales(
+        @Body request: ValidarCredencialesRequest
+    ): ValidarCredencialesResponse
 }

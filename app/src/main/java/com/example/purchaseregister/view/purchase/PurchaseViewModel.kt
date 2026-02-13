@@ -27,7 +27,14 @@ class PurchaseViewModel : ViewModel() {
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
-    fun cargarFacturasDesdeAPI(periodoInicio: String, periodoFin: String, esCompra: Boolean = true) {
+    fun cargarFacturasDesdeAPI(
+        periodoInicio: String,
+        periodoFin: String,
+        esCompra: Boolean = true,
+        ruc: String,
+        usuario: String,
+        claveSol: String
+    ) {
         viewModelScope.launch {
             val cacheKey = FacturaRepository.getCacheKey(esCompra, periodoInicio)
             val facturasEnCache = FacturaRepository.getCachedFacturas(cacheKey)
@@ -91,7 +98,13 @@ class PurchaseViewModel : ViewModel() {
             _isLoading.value = true
 
             try {
-                val response = apiService.obtenerFacturas(periodoInicio, periodoFin)
+                val response = apiService.obtenerFacturas(
+                    periodoInicio,
+                    periodoFin,
+                    ruc,
+                    usuario,
+                    claveSol
+                )
 
                 if (response.success) {
                     val facturas = parsearContenidoSunat(response.resultados, esCompra)
@@ -395,5 +408,44 @@ class PurchaseViewModel : ViewModel() {
 
     fun limpiarError() {
         _errorMessage.value = null
+    }
+
+    fun limpiarFacturas() {
+        viewModelScope.launch {
+            FacturaRepository.clearAll()
+        }
+    }
+
+    suspend fun validarCredencialesSUNAT(
+        ruc: String,
+        usuario: String,
+        claveSol: String
+    ): Boolean {
+        return try {
+            // 🔴 LOG 1: Antes de llamar al API
+            println("🌐 [VALIDACIÓN] Enviando petición a /sunat/validar-credenciales")
+            println("📦 [VALIDACIÓN] Datos: ruc=$ruc, usuario=$usuario, claveSol=****")
+
+            val response = apiService.validarCredenciales(
+                ValidarCredencialesRequest(
+                    ruc = ruc,
+                    usuario = usuario,
+                    claveSol = claveSol
+                )
+            )
+
+            // 🔴 LOG 2: Después de recibir respuesta
+            println("✅ [VALIDACIÓN] Respuesta recibida:")
+            println("   - valido: ${response.valido}")
+            println("   - mensaje: ${response.mensaje}")
+            println("   - token: ${response.token}")
+
+            response.valido
+        } catch (e: Exception) {
+            // 🔴 LOG 3: Si hay error
+            println("❌ [VALIDACIÓN] Error: ${e.message}")
+            e.printStackTrace()
+            false
+        }
     }
 }

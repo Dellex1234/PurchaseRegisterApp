@@ -54,12 +54,8 @@ object SunatPrefs {
             .getString(KEY_USER, null)
     }
 
-    fun clearAll(context: Context) {
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .remove(KEY_RUC)
-            .remove(KEY_USER)
-            .remove(KEY_CLAVE_SOL)
-            .apply()
+    fun clearCredentials(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().clear().apply()
     }
 }
